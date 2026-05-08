@@ -12,6 +12,7 @@ function CannonService.new(shipService, worldService, remotes)
 		worldService = worldService,
 		remotes = remotes,
 		pool = {},
+		ballConnections = {},
 		nextPoolIndex = 1,
 		hitTimes = {},
 	}, CannonService)
@@ -37,6 +38,10 @@ end
 function CannonService:nextBall()
 	local ball = self.pool[self.nextPoolIndex]
 	self.nextPoolIndex = (self.nextPoolIndex % #self.pool) + 1
+	if self.ballConnections[ball] then
+		self.ballConnections[ball]:Disconnect()
+		self.ballConnections[ball] = nil
+	end
 	return ball
 end
 
@@ -59,6 +64,7 @@ function CannonService:fire(player, side)
 
 	for _, z in ipairs(GameConfig.Balance.Cannons.SpawnForwardOffsets) do
 		local origin = root.Position + root.CFrame.LookVector * z + root.CFrame.RightVector * side * GameConfig.Balance.Cannons.SpawnSideOffset + Vector3.new(0, 3, 0)
+		self.remotes.CannonFX:FireAllClients(origin, right.Unit)
 		self:spawnProjectile(ship, origin, right.Unit, damage)
 	end
 end
@@ -91,16 +97,20 @@ function CannonService:spawnProjectile(attacker, origin, direction, damage)
 
 		if touched then
 			touched:Disconnect()
+			self.ballConnections[ball] = nil
 		end
 		ball.Transparency = 1
 		ball.Anchored = true
 		ball.AssemblyLinearVelocity = Vector3.zero
+		self.remotes.HitFX:FireAllClients(ball.Position)
 		self.shipService:damageShip(target, damage, attacker)
 	end)
+	self.ballConnections[ball] = touched
 
 	task.delay(GameConfig.Balance.Cannons.BallLifetime, function()
 		if touched then
 			touched:Disconnect()
+			self.ballConnections[ball] = nil
 		end
 		if ball.Parent then
 			ball.Transparency = 1

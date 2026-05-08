@@ -52,6 +52,12 @@ GameConfig.Ships = {
 }
 
 GameConfig.Balance = {
+	Camera = {
+		FollowDistance = 58,
+		FollowHeight = 31,
+		LookAhead = 42,
+		Smoothing = 0.08,
+	},
 	Ship = {
 		BaseHP = 300,
 		HullHPPerLevel = 70,
@@ -74,6 +80,8 @@ GameConfig.Balance = {
 		SpawnSideOffset = 8,
 		SpawnForwardOffsets = { -9, 9 },
 		HitDebounce = 0.2,
+		MuzzleFlashSeconds = 0.16,
+		HitBurstSeconds = 0.45,
 	},
 	Targeting = {
 		LockRange = 420,

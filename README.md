@@ -8,8 +8,13 @@ Server-authoritative Roblox naval combat prototype with merchant ships, boarding
 - Server-owned ship physics using `BodyVelocity` and `BodyGyro`.
 - Client sends ship input only; server clamps throttle/turn and replicates motion.
 - Procedural ships are rebuilt from compact `ShipRecipe` data.
+- Upgraded procedural ship visuals: rails, stern cabins, rigging, lanterns, figureheads, wake foam, and warmer materials.
+- World polish: ocean plane, foam strips, harbor towers, beacon lights, atmosphere, bloom, and sun rays.
 - Cannon combat with pooled cannonballs, server-side hit validation, HP, sinking, and merchant gold rewards.
+- Cannon feedback: muzzle flashes and hit bursts replicate to all clients.
 - Target lock, reticle, and HUD for gold/HP.
+- PC and iPad controls, including touch buttons and tap-to-lock targeting.
+- Smooth follow camera for sailing, with normal character camera during boarding.
 - NPC merchant route loop for the gold economy.
 - Boarding gate: defender must be below 50% HP and within grapple range.
 - Instanced boarding arena with defender crew NPCs.
@@ -43,6 +48,8 @@ The project uses `default.project.json` to map:
 
 ## Controls
 
+### PC
+
 - `W`: sail forward
 - `S`: reverse slowly
 - `A` / `D`: turn
@@ -51,6 +58,17 @@ The project uses `default.project.json` to map:
 - `T`: lock target under mouse
 - `B`: board locked/hovered target
 - Left click during boarding: swing temporary cutlass
+
+### iPad / Touch
+
+- `SAIL`: sail forward
+- `BACK`: reverse slowly
+- `<` / `>`: turn
+- `L` / `R`: fire left or right cannons
+- Tap an enemy ship: lock target
+- `LOCK`: lock target under touch/cursor
+- `BOARD`: start boarding against the locked/hovered ship
+- Tap during boarding with the cutlass equipped: swing
 
 Boarding only starts when the defender ship is below 50% HP and close enough to grapple.
 
@@ -65,6 +83,7 @@ src/shared/GameConfig.lua
 Useful sections:
 
 - `Balance.Ship`: HP, speed, force, turning, respawn/sink timing
+- `Balance.Camera`: follow distance, height, look-ahead, smoothing
 - `Balance.Cannons`: cooldown, damage, projectile speed, range, pool size
 - `Balance.Merchants`: NPC count, speed, HP, reward, respawn timing
 - `Balance.Boarding`: grapple range, channel time, crew count, crew HP/damage, arena timeout

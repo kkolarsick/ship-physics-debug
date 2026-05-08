@@ -10,6 +10,8 @@ Net.RemoteNames = {
 	HUDUpdate = "HUDUpdate",
 	ReticleUpdate = "ReticleUpdate",
 	BoardingState = "BoardingState",
+	CannonFX = "CannonFX",
+	HitFX = "HitFX",
 	Notify = "Notify",
 }
 

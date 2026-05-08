@@ -40,6 +40,44 @@ local function weld(root, part)
 	part.Anchored = false
 end
 
+local function addLight(parent, color, brightness, range)
+	local light = Instance.new("PointLight")
+	light.Color = color
+	light.Brightness = brightness
+	light.Range = range
+	light.Shadows = true
+	light.Parent = parent
+	return light
+end
+
+local function addFoamEmitter(parent)
+	local emitter = Instance.new("ParticleEmitter")
+	emitter.Name = "WakeMist"
+	emitter.Color = ColorSequence.new(Color3.fromRGB(222, 249, 252), Color3.fromRGB(128, 200, 212))
+	emitter.LightEmission = 0.2
+	emitter.Rate = 18
+	emitter.Lifetime = NumberRange.new(0.6, 1.2)
+	emitter.Speed = NumberRange.new(1.5, 4)
+	emitter.SpreadAngle = Vector2.new(18, 18)
+	emitter.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.7),
+		NumberSequenceKeypoint.new(1, 0),
+	})
+	emitter.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.25),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	emitter.Parent = parent
+	return emitter
+end
+
+local function makeRope(name, root, cframe, length, parent)
+	local rope = makePart(name, Vector3.new(0.25, 0.25, length), cframe, Color3.fromRGB(58, 42, 28), parent)
+	rope.Material = Enum.Material.Fabric
+	weld(root, rope)
+	return rope
+end
+
 function ShipFactory.new(worldService)
 	return setmetatable({
 		worldService = worldService,
@@ -69,6 +107,7 @@ function ShipFactory:createShip(options)
 	model.Parent = options.parent
 
 	local root = makePart("Root", Vector3.new(width, 4, length), options.cframe, hullColor, model)
+	root.Transparency = 0.08
 	root.CustomPhysicalProperties = PhysicalProperties.new(0.7, 0.25, 0.1)
 	root:SetNetworkOwner(nil)
 	model.PrimaryPart = root
@@ -78,11 +117,29 @@ function ShipFactory:createShip(options)
 	local mast = makePart("Mast", Vector3.new(1.4, 24, 1.4), root.CFrame * CFrame.new(0, 15, -2), Color3.fromRGB(88, 57, 36), model)
 	local sail = makePart("Sail", Vector3.new(0.8, 15, 13), root.CFrame * CFrame.new(0, 16, -2), sailColor, model)
 	sail.Material = Enum.Material.Fabric
+	local stern = makePart("SternCabin", Vector3.new(width * 0.72, 6, 7), root.CFrame * CFrame.new(0, 6, length / 2 - 5), Color3.fromRGB(101, 63, 38), model)
+	local railLeft = makePart("PortRail", Vector3.new(0.45, 2.1, length * 0.82), root.CFrame * CFrame.new(-width / 2 - 0.35, 4.15, 0), Color3.fromRGB(78, 49, 30), model)
+	local railRight = makePart("StarboardRail", Vector3.new(0.45, 2.1, length * 0.82), root.CFrame * CFrame.new(width / 2 + 0.35, 4.15, 0), Color3.fromRGB(78, 49, 30), model)
+	local figurehead = makeWedge("Figurehead", Vector3.new(3.5, 2.5, 4), root.CFrame * CFrame.new(0, 1.8, -length / 2 - 8), Color3.fromRGB(214, 156, 62), model)
 
 	weld(root, bow)
 	weld(root, deck)
 	weld(root, mast)
 	weld(root, sail)
+	weld(root, stern)
+	weld(root, railLeft)
+	weld(root, railRight)
+	weld(root, figurehead)
+
+	makeRope("RiggingLeft", root, root.CFrame * CFrame.new(-3.8, 16, -2) * CFrame.Angles(0, 0, math.rad(23)), 26, model)
+	makeRope("RiggingRight", root, root.CFrame * CFrame.new(3.8, 16, -2) * CFrame.Angles(0, 0, math.rad(-23)), 26, model)
+
+	for _, side in ipairs({ -1, 1 }) do
+		local lantern = makePart("Lantern", Vector3.new(1, 1, 1), root.CFrame * CFrame.new(side * (width / 2 - 2), 7, length / 2 - 1), Color3.fromRGB(255, 183, 83), model)
+		lantern.Material = Enum.Material.Neon
+		addLight(lantern, Color3.fromRGB(255, 174, 78), 0.9, 20)
+		weld(root, lantern)
+	end
 
 	local cannonFolder = Instance.new("Folder")
 	cannonFolder.Name = "Cannons"
@@ -96,6 +153,19 @@ function ShipFactory:createShip(options)
 			weld(root, cannon)
 		end
 	end
+
+	local wakeLeft = makePart("WakeFoamLeft", Vector3.new(2.4, 0.08, length * 0.8), root.CFrame * CFrame.new(-width / 2 - 2.8, -2.05, 2), Color3.fromRGB(196, 238, 242), model)
+	wakeLeft.Material = Enum.Material.Neon
+	wakeLeft.Transparency = 0.72
+	wakeLeft.CanCollide = false
+	addFoamEmitter(wakeLeft)
+	local wakeRight = makePart("WakeFoamRight", Vector3.new(2.4, 0.08, length * 0.8), root.CFrame * CFrame.new(width / 2 + 2.8, -2.05, 2), Color3.fromRGB(196, 238, 242), model)
+	wakeRight.Material = Enum.Material.Neon
+	wakeRight.Transparency = 0.72
+	wakeRight.CanCollide = false
+	addFoamEmitter(wakeRight)
+	weld(root, wakeLeft)
+	weld(root, wakeRight)
 
 	local bodyVelocity = Instance.new("BodyVelocity")
 	bodyVelocity.Name = "ShipBodyVelocity"
