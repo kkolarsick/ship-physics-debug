@@ -94,6 +94,7 @@ function ShipFactory:createShip(options)
 	local width = design.width or 12
 	local hullColor = RecipeUtil.color3FromTable(design.hullColor)
 	local sailColor = RecipeUtil.color3FromTable(design.sailColor)
+	local trimColor = RecipeUtil.trimColor(recipe)
 
 	local model = Instance.new("Model")
 	model.Name = options.name or ("Ship_" .. self.nextShipId)
@@ -120,7 +121,7 @@ function ShipFactory:createShip(options)
 	local stern = makePart("SternCabin", Vector3.new(width * 0.72, 6, 7), root.CFrame * CFrame.new(0, 6, length / 2 - 5), Color3.fromRGB(101, 63, 38), model)
 	local railLeft = makePart("PortRail", Vector3.new(0.45, 2.1, length * 0.82), root.CFrame * CFrame.new(-width / 2 - 0.35, 4.15, 0), Color3.fromRGB(78, 49, 30), model)
 	local railRight = makePart("StarboardRail", Vector3.new(0.45, 2.1, length * 0.82), root.CFrame * CFrame.new(width / 2 + 0.35, 4.15, 0), Color3.fromRGB(78, 49, 30), model)
-	local figurehead = makeWedge("Figurehead", Vector3.new(3.5, 2.5, 4), root.CFrame * CFrame.new(0, 1.8, -length / 2 - 8), Color3.fromRGB(214, 156, 62), model)
+	local figurehead = makeWedge("Figurehead", Vector3.new(3.5, 2.5, 4), root.CFrame * CFrame.new(0, 1.8, -length / 2 - 8), trimColor, model)
 
 	weld(root, bow)
 	weld(root, deck)

@@ -1,4 +1,5 @@
 local Players = game:GetService("Players")
+local MarketplaceService = game:GetService("MarketplaceService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -6,6 +7,7 @@ local Workspace = game:GetService("Workspace")
 
 local Net = require(ReplicatedStorage.Shared.Net)
 local GameConfig = require(ReplicatedStorage.Shared.GameConfig)
+local ShopConfig = require(ReplicatedStorage.Shared.ShopConfig)
 
 local player = Players.LocalPlayer
 local remotes = Net.bootstrap()
@@ -20,12 +22,17 @@ local state = {
 	notice = nil,
 	reticle = nil,
 	board = nil,
+	shopPanel = nil,
+	modPanel = nil,
+	eventBanner = nil,
+	shopSnapshot = nil,
 	controlMode = if UserInputService.TouchEnabled then "Touch" else "Keyboard",
 	inBoarding = false,
 }
 
 local findTargetFromMouse
 local findTargetFromScreenPoint
+local showNotice
 
 local function makeLabel(parent, name, position, size)
 	local label = Instance.new("TextLabel")
@@ -71,6 +78,148 @@ local function makeButton(parent, name, text, position, size)
 	return button
 end
 
+local function clearChildren(parent)
+	for _, child in ipairs(parent:GetChildren()) do
+		if not child:IsA("UIListLayout") and not child:IsA("UIPadding") and not child:IsA("UICorner") and not child:IsA("UIStroke") then
+			child:Destroy()
+		end
+	end
+end
+
+local function makePanel(parent, name, position, size)
+	local panel = Instance.new("ScrollingFrame")
+	panel.Name = name
+	panel.Position = position
+	panel.Size = size
+	panel.CanvasSize = UDim2.fromScale(0, 0)
+	panel.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	panel.ScrollBarThickness = 6
+	panel.BackgroundColor3 = Color3.fromRGB(13, 18, 24)
+	panel.BackgroundTransparency = 0.08
+	panel.BorderSizePixel = 0
+	panel.Visible = false
+	panel.Parent = parent
+
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 8)
+	corner.Parent = panel
+
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = Color3.fromRGB(255, 190, 90)
+	stroke.Thickness = 2
+	stroke.Transparency = 0.35
+	stroke.Parent = panel
+
+	local padding = Instance.new("UIPadding")
+	padding.PaddingTop = UDim.new(0, 10)
+	padding.PaddingBottom = UDim.new(0, 10)
+	padding.PaddingLeft = UDim.new(0, 10)
+	padding.PaddingRight = UDim.new(0, 10)
+	padding.Parent = panel
+
+	local layout = Instance.new("UIListLayout")
+	layout.Padding = UDim.new(0, 8)
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Parent = panel
+
+	return panel
+end
+
+local function makePanelButton(parent, text, callback)
+	local button = Instance.new("TextButton")
+	button.Size = UDim2.new(1, 0, 0, 42)
+	button.BackgroundColor3 = Color3.fromRGB(33, 43, 52)
+	button.BackgroundTransparency = 0.05
+	button.BorderSizePixel = 0
+	button.Font = Enum.Font.GothamBold
+	button.TextColor3 = Color3.fromRGB(255, 244, 216)
+	button.TextScaled = true
+	button.TextWrapped = true
+	button.Text = text
+	button.Parent = parent
+
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 6)
+	corner.Parent = button
+
+	button.Activated:Connect(callback)
+	return button
+end
+
+local function makePanelText(parent, text, height)
+	local label = makeLabel(parent, "PanelText", UDim2.fromScale(0, 0), UDim2.new(1, 0, 0, height or 32))
+	label.BackgroundTransparency = 1
+	label.Text = text
+	label.TextWrapped = true
+	return label
+end
+
+local function renderShop()
+	if not state.shopPanel or not state.shopSnapshot then
+		return
+	end
+
+	clearChildren(state.shopPanel)
+	local snapshot = state.shopSnapshot
+	makePanelText(state.shopPanel, ("SHOP  Gold: %d"):format(snapshot.gold or 0), 34)
+
+	for _, item in ipairs(snapshot.goldItems or {}) do
+		local upgradeText = ""
+		if item.kind == "upgrade" then
+			local current = snapshot.activeUpgrades and snapshot.activeUpgrades[item.upgradeKey] or 1
+			upgradeText = (" L%d/%d"):format(current or 1, item.maxLevel or 5)
+		elseif item.kind == "cosmetic" and snapshot.ownedCosmetics and snapshot.ownedCosmetics[item.cosmeticId] then
+			upgradeText = " OWNED"
+		end
+		makePanelButton(state.shopPanel, ("%s%s - %d gold"):format(item.name, upgradeText, item.price), function()
+			remotes.ShopPurchase:FireServer(item.id)
+		end)
+	end
+
+	makePanelText(state.shopPanel, "ROBUX PRODUCTS", 28)
+	for _, product in ipairs(snapshot.products or {}) do
+		makePanelButton(state.shopPanel, product.name .. " - Robux", function()
+			if product.productId and product.productId > 0 then
+				MarketplaceService:PromptProductPurchase(player, product.productId)
+			else
+				showNotice("Set this productId in ShopConfig before publishing.")
+			end
+		end)
+	end
+
+	makePanelText(state.shopPanel, "OWNED SKINS", 28)
+	for cosmeticId in pairs(snapshot.ownedCosmetics or {}) do
+		local cosmetic = ShopConfig.Cosmetics[cosmeticId]
+		if cosmetic then
+			local suffix = if snapshot.equippedCosmetic == cosmeticId then " EQUIPPED" else ""
+			makePanelButton(state.shopPanel, cosmetic.name .. suffix, function()
+				remotes.EquipCosmetic:FireServer(cosmeticId)
+			end)
+		end
+	end
+end
+
+local function renderModeratorPanel(isModerator)
+	if not state.modPanel then
+		return
+	end
+	state.modPanel.Visible = isModerator and state.modPanel.Visible
+	clearChildren(state.modPanel)
+	makePanelText(state.modPanel, "MODERATOR", 34)
+	makePanelButton(state.modPanel, "Toggle Cruise Ship", function()
+		remotes.ModeratorCommand:FireServer("toggleCruise")
+	end)
+	makePanelButton(state.modPanel, "Start Gold Rush", function()
+		remotes.ModeratorCommand:FireServer("goldRush")
+	end)
+	makePanelButton(state.modPanel, "Spawn Merchant Convoy", function()
+		remotes.ModeratorCommand:FireServer("merchantConvoy")
+	end)
+	makePanelButton(state.modPanel, "End Event", function()
+		remotes.ModeratorCommand:FireServer("endEvent")
+	end)
+end
+
 local function buildHUD()
 	local gui = Instance.new("ScreenGui")
 	gui.Name = "PirateHUD"
@@ -86,6 +235,10 @@ local function buildHUD()
 	state.board = makeLabel(gui, "Boarding", UDim2.new(0.5, -170, 0.82, 0), UDim2.fromOffset(340, 48))
 	state.board.Text = ""
 	state.board.Visible = false
+
+	state.eventBanner = makeLabel(gui, "EventBanner", UDim2.new(0.5, -220, 0, 80), UDim2.fromOffset(440, 38))
+	state.eventBanner.Text = ""
+	state.eventBanner.Visible = false
 
 	state.reticle = Instance.new("Frame")
 	state.reticle.Name = "Reticle"
@@ -103,6 +256,22 @@ local function buildHUD()
 	local corner = Instance.new("UICorner")
 	corner.CornerRadius = UDim.new(1, 0)
 	corner.Parent = state.reticle
+
+	local shopToggle = makeButton(gui, "ShopToggle", "SHOP", UDim2.new(1, -82, 0, 72), UDim2.fromOffset(108, 52))
+	shopToggle.Activated:Connect(function()
+		state.shopPanel.Visible = not state.shopPanel.Visible
+		renderShop()
+	end)
+
+	local modToggle = makeButton(gui, "ModToggle", "MOD", UDim2.new(1, -82, 0, 132), UDim2.fromOffset(108, 52))
+	modToggle.Visible = false
+	modToggle.Activated:Connect(function()
+		state.modPanel.Visible = not state.modPanel.Visible
+	end)
+
+	state.shopPanel = makePanel(gui, "ShopPanel", UDim2.new(1, -390, 0, 164), UDim2.fromOffset(360, 510))
+	state.modPanel = makePanel(gui, "ModeratorPanel", UDim2.new(0, 18, 0, 128), UDim2.fromOffset(300, 250))
+	state.modToggle = modToggle
 
 	if UserInputService.TouchEnabled then
 		local controls = Instance.new("Frame")
@@ -180,7 +349,7 @@ local function buildHUD()
 	end
 end
 
-local function showNotice(text)
+showNotice = function(text)
 	state.notice.Text = text
 	state.notice.Visible = true
 	task.delay(3, function()
@@ -332,6 +501,25 @@ end)
 remotes.Notify.OnClientEvent:Connect(showNotice)
 remotes.CannonFX.OnClientEvent:Connect(cannonFlash)
 remotes.HitFX.OnClientEvent:Connect(hitBurst)
+remotes.ShopState.OnClientEvent:Connect(function(snapshot)
+	state.shopSnapshot = snapshot
+	renderShop()
+end)
+remotes.ModeratorState.OnClientEvent:Connect(function(data)
+	local isModerator = data and data.isModerator == true
+	if state.modToggle then
+		state.modToggle.Visible = isModerator
+	end
+	renderModeratorPanel(isModerator)
+end)
+remotes.EventState.OnClientEvent:Connect(function(activeEvent)
+	if activeEvent then
+		state.eventBanner.Text = ("LIVE EVENT: %s"):format(activeEvent.kind)
+		state.eventBanner.Visible = true
+	else
+		state.eventBanner.Visible = false
+	end
+end)
 
 remotes.BoardingState.OnClientEvent:Connect(function(mode, value)
 	if mode == "channel" then

@@ -20,6 +20,9 @@ Server-authoritative Roblox naval combat prototype with merchant ships, boarding
 - Instanced boarding arena with defender crew NPCs.
 - Capture semantics: winner receives a copied `ShipRecipe`; a fresh prize ship spawns at nearest port.
 - DataStore persists `PlayerProfile` plus `ShipRecipe` only, not live part graphs.
+- Addictive progression loop: merchant-sink milestones, capture rewards, gold spend goals, and persistent upgrades.
+- Shop UI for gold cosmetics/upgrades plus Robux developer-product hooks.
+- Moderator-only live tools for cruise mode, Gold Rush, merchant convoy events, and ending events.
 
 Ports and territory control are intentionally out of scope for this MVP.
 
@@ -83,12 +86,52 @@ src/shared/GameConfig.lua
 Useful sections:
 
 - `Balance.Ship`: HP, speed, force, turning, respawn/sink timing
+- `Balance.Progression`: merchant milestones and capture rewards
 - `Balance.Camera`: follow distance, height, look-ahead, smoothing
 - `Balance.Cannons`: cooldown, damage, projectile speed, range, pool size
 - `Balance.Merchants`: NPC count, speed, HP, reward, respawn timing
 - `Balance.Boarding`: grapple range, channel time, crew count, crew HP/damage, arena timeout
 - `World.Ports`: prize ship spawn locations
 - `World.MerchantRoutes`: merchant patrol routes
+- `Moderation.ModeratorUserIds`: Roblox user ids allowed to run live events
+
+Shop and microtransaction setup lives in:
+
+```text
+src/shared/ShopConfig.lua
+```
+
+Set each Robux product's `productId` after creating Developer Products in the Roblox Creator Dashboard. Leave the ids as `0` while testing without real purchases.
+
+## Shop / Monetization
+
+Gold shop items are server-validated through `ShopService`:
+
+- Ship skins: Crimson Corsair, Royal Navy
+- Upgrades: hull HP, cannon damage, sail speed, boarding crew
+
+Robux products are configured as Developer Product hooks:
+
+- Coin Pouch
+- Treasure Chest
+- Storm Sails bundle
+- Cannon Upgrade Kit
+- Sail Upgrade Kit
+
+The client only prompts purchases or sends item ids. The server owns all grants, receipt processing, gold spending, upgrade levels, and cosmetic ownership.
+
+## Moderator Events
+
+Add moderator Roblox user ids in `GameConfig.Moderation.ModeratorUserIds`.
+
+Moderators get a `MOD` panel in-game:
+
+- `Toggle Cruise Ship`: fast, high-HP moderator cruise mode
+- `Start Gold Rush`: doubles merchant gold rewards during the live event
+- `Spawn Merchant Convoy`: adds extra merchant ships for players to chase
+- `End Event`: clears the current live event
+
+These tools are server-gated; non-moderators cannot activate them by firing remotes.
 
 ## Persistence Model
 
@@ -97,6 +140,11 @@ Only compact profile data is saved:
 ```lua
 {
 	gold = number,
+	totalGoldEarned = number,
+	merchantSinks = number,
+	captures = number,
+	equippedCosmetic = string,
+	ownedCosmetics = { [cosmeticId] = true },
 	activeShipIndex = number,
 	ships = { ShipRecipe }
 }

@@ -1,4 +1,5 @@
 local GameConfig = require(script.Parent.GameConfig)
+local ShopConfig = require(script.Parent.ShopConfig)
 
 local RecipeUtil = {}
 
@@ -22,6 +23,16 @@ function RecipeUtil.defaultRecipe()
 	return RecipeUtil.deepCopy(GameConfig.Ships.DefaultRecipe)
 end
 
+function RecipeUtil.applyCosmetic(recipe, cosmeticId)
+	local cosmetic = ShopConfig.Cosmetics[cosmeticId or "default"] or ShopConfig.Cosmetics.default
+	recipe.cosmeticId = cosmetic.id
+	recipe.design = recipe.design or {}
+	recipe.design.hullColor = RecipeUtil.deepCopy(cosmetic.hullColor)
+	recipe.design.sailColor = RecipeUtil.deepCopy(cosmetic.sailColor)
+	recipe.design.trimColor = RecipeUtil.deepCopy(cosmetic.trimColor)
+	return recipe
+end
+
 function RecipeUtil.prizeFromRecipe(recipe)
 	local prize = RecipeUtil.deepCopy(recipe)
 	prize.id = ("%s_%d"):format(recipe.id or "ship", os.time())
@@ -37,6 +48,11 @@ function RecipeUtil.color3FromTable(value)
 
 	value = value or { r = 255, g = 255, b = 255 }
 	return Color3.fromRGB(value.r or 255, value.g or 255, value.b or 255)
+end
+
+function RecipeUtil.trimColor(recipe)
+	local design = recipe.design or {}
+	return RecipeUtil.color3FromTable(design.trimColor or { r = 214, g = 156, b = 62 })
 end
 
 function RecipeUtil.maxHP(recipe)

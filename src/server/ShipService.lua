@@ -43,6 +43,18 @@ function ShipService:spawnPlayerShip(player, recipe, cframe)
 	return ship
 end
 
+function ShipService:refreshPlayerShip(player)
+	local current = self:getPlayerShip(player)
+	local cframe = current and current.root and current.root.CFrame or self.worldService:portSpawnCFrame(Vector3.zero)
+	if current and current.model then
+		current.model:Destroy()
+		self.ships[current.id] = nil
+		self.shipsByModel[current.model] = nil
+		self.shipsByPlayer[player] = nil
+	end
+	return self:spawnPlayerShip(player, self.profileService:getActiveRecipe(player), cframe)
+end
+
 function ShipService:spawnPrizeShip(player, recipe, nearPosition)
 	local ship = self.shipFactory:createShip({
 		name = player.Name .. "_PrizeShip",
@@ -136,8 +148,17 @@ function ShipService:sinkShip(ship, attacker)
 	ship.root.ShipBodyGyro.MaxTorque = Vector3.zero
 
 	if ship.isMerchant and attacker and attacker.owner then
-		self.profileService:addGold(attacker.owner, GameConfig.Balance.Merchants.GoldReward)
-		self.remotes.Notify:FireClient(attacker.owner, ("Merchant sunk: +%d gold"):format(GameConfig.Balance.Merchants.GoldReward))
+		local reward = GameConfig.Balance.Merchants.GoldReward
+		if self.activeEvent and self.activeEvent.kind == "GoldRush" then
+			reward *= GameConfig.Balance.Merchants.EventGoldMultiplier
+		end
+		self.profileService:addGold(attacker.owner, reward)
+		local merchantSinks = self.profileService:addMerchantSink(attacker.owner)
+		if merchantSinks > 0 and merchantSinks % GameConfig.Balance.Progression.MerchantMilestoneEvery == 0 then
+			self.profileService:addGold(attacker.owner, GameConfig.Balance.Progression.MerchantMilestoneBonusGold)
+			self.remotes.Notify:FireClient(attacker.owner, ("Merchant milestone: +%d bonus gold"):format(GameConfig.Balance.Progression.MerchantMilestoneBonusGold))
+		end
+		self.remotes.Notify:FireClient(attacker.owner, ("Merchant sunk: +%d gold"):format(reward))
 		self:sendHUD(attacker.owner)
 	end
 
@@ -184,6 +205,9 @@ function ShipService:start()
 				local throttle = if stale then 0 else ship.input.throttle
 				local turn = if stale then 0 else ship.input.turn
 				local speed = ship.isMerchant and GameConfig.Balance.Merchants.Speed or RecipeUtil.maxSpeed(ship.recipe)
+				if ship.model:GetAttribute("ModeratorCruise") then
+					speed = GameConfig.Moderation.CruiseSpeed
+				end
 
 				local flatLook = Vector3.new(root.CFrame.LookVector.X, 0, root.CFrame.LookVector.Z)
 				if flatLook.Magnitude < 0.01 then

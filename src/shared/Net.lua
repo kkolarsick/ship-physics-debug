@@ -12,6 +12,12 @@ Net.RemoteNames = {
 	BoardingState = "BoardingState",
 	CannonFX = "CannonFX",
 	HitFX = "HitFX",
+	ShopPurchase = "ShopPurchase",
+	EquipCosmetic = "EquipCosmetic",
+	ShopState = "ShopState",
+	ModeratorCommand = "ModeratorCommand",
+	ModeratorState = "ModeratorState",
+	EventState = "EventState",
 	Notify = "Notify",
 }
 

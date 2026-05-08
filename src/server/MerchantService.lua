@@ -37,6 +37,13 @@ function MerchantService:spawn(index)
 	return ship
 end
 
+function MerchantService:spawnConvoy(count)
+	local start = GameConfig.Balance.Merchants.Count + 1
+	for index = start, start + count - 1 do
+		self:spawn(index)
+	end
+end
+
 function MerchantService:start()
 	for index = 1, GameConfig.Balance.Merchants.Count do
 		self:spawn(index)

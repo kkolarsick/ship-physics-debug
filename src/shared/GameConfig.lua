@@ -5,6 +5,14 @@ GameConfig.DataStore = {
 	SaveInterval = 60,
 }
 
+GameConfig.Moderation = {
+	ModeratorUserIds = {
+		-- Add Roblox user ids here, for example: [123456789] = true
+	},
+	CruiseSpeed = 95,
+	EventDuration = 300,
+}
+
 GameConfig.World = {
 	WaterY = 0,
 	SpawnHeight = 8,
@@ -52,6 +60,11 @@ GameConfig.Ships = {
 }
 
 GameConfig.Balance = {
+	Progression = {
+		MerchantMilestoneEvery = 5,
+		MerchantMilestoneBonusGold = 350,
+		CaptureRewardGold = 500,
+	},
 	Camera = {
 		FollowDistance = 58,
 		FollowHeight = 31,
@@ -92,6 +105,7 @@ GameConfig.Balance = {
 		HP = 180,
 		Speed = 32,
 		GoldReward = 120,
+		EventGoldMultiplier = 2,
 		RouteArriveDistance = 28,
 		RespawnDelay = 10,
 	},
