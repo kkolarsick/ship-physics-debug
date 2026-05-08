@@ -11,6 +11,8 @@ local ShopConfig = require(ReplicatedStorage.Shared.ShopConfig)
 
 local player = Players.LocalPlayer
 local remotes = Net.bootstrap()
+local playerModule = player:WaitForChild("PlayerScripts"):WaitForChild("PlayerModule")
+local controls = require(playerModule):GetControls()
 
 local state = {
 	throttle = 0,
@@ -29,6 +31,8 @@ local state = {
 	shopSnapshot = nil,
 	controlMode = if UserInputService.TouchEnabled then "Touch" else "Keyboard",
 	inBoarding = false,
+	avatarControlsEnabled = true,
+	onFoot = false,
 }
 
 local findTargetFromMouse
@@ -306,6 +310,7 @@ local function buildHUD()
 		local fireRight = makeButton(controls, "FireRight", "R", UDim2.new(0.88, 0, 0.84, 0), UDim2.fromOffset(82, 82))
 		local lock = makeButton(controls, "Lock", "LOCK", UDim2.new(0.805, 0, 0.69, 0), UDim2.fromOffset(92, 64))
 		local board = makeButton(controls, "Board", "BOARD", UDim2.new(0.805, 0, 0.94, 0), UDim2.fromOffset(138, 58))
+		local walk = makeButton(controls, "WalkToggle", "WALK", UDim2.new(0.5, 0, 0.94, 0), UDim2.fromOffset(120, 58))
 
 		local function hold(button, onDown, onUp)
 			button.InputBegan:Connect(function(input)
@@ -364,6 +369,10 @@ local function buildHUD()
 			local target = state.target or findTargetFromMouse()
 			remotes.BoardRequest:FireServer(target)
 		end)
+		walk.Activated:Connect(function()
+			state.onFoot = not state.onFoot
+			showNotice(if state.onFoot then "Shore leave: avatar controls on." else "Captain mode: ship controls on.")
+		end)
 	end
 end
 
@@ -378,6 +387,12 @@ showNotice = function(text)
 end
 
 local function updateInputFromKeys()
+	if state.onFoot then
+		state.throttle = 0
+		state.turn = 0
+		return
+	end
+
 	local throttle = 0
 	local turn = 0
 	if UserInputService:IsKeyDown(Enum.KeyCode.W) then
@@ -439,6 +454,18 @@ local function findOwnedShipRoot()
 	return nil
 end
 
+local function setAvatarControlsEnabled(enabled)
+	if state.avatarControlsEnabled == enabled then
+		return
+	end
+	state.avatarControlsEnabled = enabled
+	if enabled then
+		controls:Enable()
+	else
+		controls:Disable()
+	end
+end
+
 local function burstPart(name, position, color, size, lifetime)
 	local part = Instance.new("Part")
 	part.Name = name
@@ -494,6 +521,9 @@ UserInputService.InputBegan:Connect(function(input, processed)
 	elseif input.KeyCode == Enum.KeyCode.B then
 		local target = state.target or findTargetFromMouse()
 		remotes.BoardRequest:FireServer(target)
+	elseif input.KeyCode == Enum.KeyCode.X then
+		state.onFoot = not state.onFoot
+		showNotice(if state.onFoot then "Shore leave: avatar controls on." else "Captain mode: ship controls on.")
 	end
 end)
 
@@ -597,15 +627,19 @@ RunService.RenderStepped:Connect(function(dt)
 		state.reticle.Visible = false
 	end
 
-	local shipRoot = if state.inBoarding then nil else findOwnedShipRoot()
+	local shipRoot = if state.inBoarding or state.onFoot then nil else findOwnedShipRoot()
 	if shipRoot and camera then
+		setAvatarControlsEnabled(false)
 		camera.CameraType = Enum.CameraType.Scriptable
 		local look = shipRoot.CFrame.LookVector
 		local desiredPosition = shipRoot.Position - look * GameConfig.Balance.Camera.FollowDistance + Vector3.new(0, GameConfig.Balance.Camera.FollowHeight, 0)
 		local lookAt = shipRoot.Position + look * GameConfig.Balance.Camera.LookAhead
 		local desired = CFrame.new(desiredPosition, lookAt)
 		camera.CFrame = camera.CFrame:Lerp(desired, math.clamp(dt / GameConfig.Balance.Camera.Smoothing, 0, 1))
-	elseif state.inBoarding and camera then
+	elseif (state.inBoarding or state.onFoot) and camera then
+		setAvatarControlsEnabled(true)
 		camera.CameraType = Enum.CameraType.Custom
+	elseif camera then
+		setAvatarControlsEnabled(true)
 	end
 end)

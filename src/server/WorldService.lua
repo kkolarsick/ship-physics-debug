@@ -6,6 +6,42 @@ local GameConfig = require(game:GetService("ReplicatedStorage").Shared.GameConfi
 local WorldService = {}
 WorldService.__index = WorldService
 
+local function makeAnchoredPart(parent, name, size, cframe, color, material)
+	local part = Instance.new("Part")
+	part.Name = name
+	part.Anchored = true
+	part.Size = size
+	part.CFrame = cframe
+	part.Color = color
+	part.Material = material or Enum.Material.SmoothPlastic
+	part.TopSurface = Enum.SurfaceType.Smooth
+	part.BottomSurface = Enum.SurfaceType.Smooth
+	part.Parent = parent
+	return part
+end
+
+local function addPalm(parent, position, height)
+	local trunk = makeAnchoredPart(parent, "PalmTrunk", Vector3.new(2, height, 2), CFrame.new(position + Vector3.new(0, height / 2, 0)) * CFrame.Angles(0, 0, math.rad(8)), Color3.fromRGB(104, 69, 38), Enum.Material.Wood)
+	for index = 1, 5 do
+		local leaf = makeAnchoredPart(parent, "PalmLeaf", Vector3.new(3, 1, 13), CFrame.new(position + Vector3.new(0, height + 1, 0)) * CFrame.Angles(0, math.rad(index * 72), math.rad(18)), Color3.fromRGB(38, 128, 58), Enum.Material.Grass)
+		leaf.CanCollide = false
+	end
+	return trunk
+end
+
+local function addHut(parent, position, color)
+	local base = makeAnchoredPart(parent, "HarborHut", Vector3.new(18, 10, 14), CFrame.new(position + Vector3.new(0, 5, 0)), color, Enum.Material.WoodPlanks)
+	local roof = Instance.new("WedgePart")
+	roof.Name = "HutRoof"
+	roof.Anchored = true
+	roof.Size = Vector3.new(20, 8, 16)
+	roof.CFrame = CFrame.new(position + Vector3.new(0, 13, 0)) * CFrame.Angles(0, math.rad(90), 0)
+	roof.Color = Color3.fromRGB(92, 55, 32)
+	roof.Material = Enum.Material.Wood
+	roof.Parent = parent
+	return base
+end
+
 function WorldService.new()
 	return setmetatable({
 		folders = {},
@@ -103,24 +139,32 @@ function WorldService:setup()
 			model.Name = port.name
 			model.Parent = Workspace
 
-			local dock = Instance.new("Part")
-			dock.Name = "Dock"
-			dock.Anchored = true
-			dock.Size = Vector3.new(70, 4, 32)
-			dock.Position = port.position
-			dock.Color = Color3.fromRGB(112, 80, 51)
-			dock.Material = Enum.Material.WoodPlanks
-			dock.Parent = model
+			local island = Instance.new("Part")
+			island.Name = "Island"
+			island.Anchored = true
+			island.Shape = Enum.PartType.Cylinder
+			island.Size = Vector3.new(9, 170, 135)
+			island.CFrame = CFrame.new(port.position + Vector3.new(0, -2, 0)) * CFrame.Angles(0, 0, math.rad(90))
+			island.Color = Color3.fromRGB(212, 190, 132)
+			island.Material = Enum.Material.Sand
+			island.Parent = model
+
+			local grass = Instance.new("Part")
+			grass.Name = "IslandGreen"
+			grass.Anchored = true
+			grass.Shape = Enum.PartType.Cylinder
+			grass.Size = Vector3.new(1.2, 112, 82)
+			grass.CFrame = CFrame.new(port.position + Vector3.new(0, 3.15, 0)) * CFrame.Angles(0, 0, math.rad(90))
+			grass.Color = Color3.fromRGB(67, 147, 66)
+			grass.Material = Enum.Material.Grass
+			grass.Parent = model
+
+			local dockDirection = (port.spawnPosition - port.position).Unit
+			local dockCenter = port.position + dockDirection * 58
+			local dock = makeAnchoredPart(model, "Dock", Vector3.new(34, 4, 82), CFrame.new(dockCenter, port.spawnPosition), Color3.fromRGB(112, 80, 51), Enum.Material.WoodPlanks)
 			model.PrimaryPart = dock
 
-			local tower = Instance.new("Part")
-			tower.Name = "HarborTower"
-			tower.Anchored = true
-			tower.Size = Vector3.new(14, 38, 14)
-			tower.Position = port.position + Vector3.new(-32, 20, -8)
-			tower.Color = Color3.fromRGB(198, 181, 143)
-			tower.Material = Enum.Material.Slate
-			tower.Parent = model
+			local tower = makeAnchoredPart(model, "HarborTower", Vector3.new(14, 38, 14), CFrame.new(port.position + Vector3.new(-32, 20, -8)), Color3.fromRGB(198, 181, 143), Enum.Material.Slate)
 
 			local beacon = Instance.new("PointLight")
 			beacon.Name = "Beacon"
@@ -139,6 +183,27 @@ function WorldService:setup()
 			marker.CFrame = CFrame.new(port.position + Vector3.new(0, 5, 52)) * CFrame.Angles(0, 0, math.rad(90))
 			marker.Color = Color3.fromRGB(64, 196, 126)
 			marker.Parent = model
+
+			for index = 1, 5 do
+				local angle = math.rad(index * 72 + (#port.name * 5))
+				addPalm(model, port.position + Vector3.new(math.cos(angle) * 46, 5, math.sin(angle) * 34), 18 + (index % 3) * 3)
+			end
+
+			addHut(model, port.position + Vector3.new(22, 4, -24), if port.theme == "pirate" then Color3.fromRGB(91, 45, 39) else Color3.fromRGB(139, 97, 55))
+			addHut(model, port.position + Vector3.new(-18, 4, 28), if port.theme == "market" then Color3.fromRGB(180, 95, 64) else Color3.fromRGB(116, 78, 47))
+
+			if port.theme == "temple" then
+				makeAnchoredPart(model, "Sunspire", Vector3.new(18, 44, 18), CFrame.new(port.position + Vector3.new(14, 26, 12)), Color3.fromRGB(220, 191, 112), Enum.Material.Slate)
+			elseif port.theme == "pirate" then
+				makeAnchoredPart(model, "SkullRock", Vector3.new(24, 20, 18), CFrame.new(port.position + Vector3.new(10, 14, 22)), Color3.fromRGB(56, 56, 60), Enum.Material.Rock)
+			elseif port.theme == "navy" then
+				makeAnchoredPart(model, "FortWall", Vector3.new(52, 16, 8), CFrame.new(port.position + Vector3.new(0, 10, -38)), Color3.fromRGB(174, 169, 151), Enum.Material.Slate)
+			end
+
+			local activity = makeAnchoredPart(model, "TreasureHuntSpot", Vector3.new(12, 1, 12), CFrame.new(port.position + Vector3.new(-26, 5.4, 16)), Color3.fromRGB(255, 214, 91), Enum.Material.Neon)
+			activity.Transparency = 0.35
+			activity.CanCollide = false
+			activity:SetAttribute("PortName", port.name)
 		end
 	end
 end
@@ -158,7 +223,7 @@ end
 
 function WorldService:portSpawnCFrame(position)
 	local port = self:nearestPort(position)
-	return CFrame.new(port.position + Vector3.new(0, GameConfig.World.SpawnHeight, 68), port.position + Vector3.new(0, GameConfig.World.SpawnHeight, 160))
+	return CFrame.new(port.spawnPosition, port.spawnPosition + (port.spawnPosition - port.position).Unit * 90)
 end
 
 return WorldService

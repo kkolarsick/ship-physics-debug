@@ -49,7 +49,9 @@ function ShopService:buyGoldItem(player, itemId)
 	if item.kind == "cosmetic" then
 		local profile = self.profileService:get(player)
 		if profile and profile.ownedCosmetics[item.cosmeticId] then
-			self.remotes.Notify:FireClient(player, "Already owned.")
+			self.profileService:equipCosmetic(player, item.cosmeticId)
+			self.shipService:refreshPlayerShip(player)
+			self.remotes.Notify:FireClient(player, "Already owned. Skin equipped.")
 			self:sendState(player)
 			return
 		end
@@ -64,7 +66,9 @@ function ShopService:buyGoldItem(player, itemId)
 	elseif item.kind == "flag" then
 		local profile = self.profileService:get(player)
 		if profile and profile.ownedFlags[item.flagId] then
-			self.remotes.Notify:FireClient(player, "Already owned.")
+			self.profileService:equipFlag(player, item.flagId)
+			self.shipService:refreshPlayerShip(player)
+			self.remotes.Notify:FireClient(player, "Already owned. Flag raised.")
 			self:sendState(player)
 			return
 		end

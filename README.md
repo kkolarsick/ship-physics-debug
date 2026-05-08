@@ -26,6 +26,7 @@ Server-authoritative Roblox naval combat prototype with merchant ships, boarding
 - Moderator-only live tools for cruise mode, Gold Rush, merchant convoy events, and ending events.
 - PvP port control: hold a harbor capture zone or sink enemy players near a port to flip ownership.
 - Rare Ghost Ship NPC: all-black, unkillable, one-shots ships, and removes 10% of a victim's gold.
+- Eight distinct ports with larger islands, docks, towers, huts, palms, themed landmarks, and treasure-search spots.
 
 Ports and territory control are intentionally out of scope for this MVP.
 
@@ -63,6 +64,7 @@ The project uses `default.project.json` to map:
 - `E`: fire right cannons
 - `T`: lock target under mouse
 - `B`: board locked/hovered target
+- `X`: toggle shore leave / captain mode
 - Left click during boarding: swing temporary cutlass
 
 ### iPad / Touch
@@ -74,9 +76,12 @@ The project uses `default.project.json` to map:
 - Tap an enemy ship: lock target
 - `LOCK`: lock target under touch/cursor
 - `BOARD`: start boarding against the locked/hovered ship
+- `WALK`: toggle shore leave / captain mode
 - Tap during boarding with the cutlass equipped: swing
 
 Boarding only starts when the defender ship is below 50% HP and close enough to grapple.
+
+Captain mode disables default avatar movement and drives the ship instead. Shore leave re-enables avatar controls so players can walk on islands and use treasure-search prompts.
 
 ## Tuning
 
@@ -95,6 +100,7 @@ Useful sections:
 - `Balance.Merchants`: NPC count, speed, HP, reward, respawn timing
 - `Balance.PortControl`: capture radius/time and PvP port rewards
 - `Balance.GhostShip`: rare spawn rate, lifetime, speed, attack range, gold-loss percent
+- `Balance.IslandActivities`: treasure-search cooldown and reward range
 - `Balance.Boarding`: grapple range, channel time, crew count, crew HP/damage, arena timeout
 - `World.Ports`: prize ship spawn locations
 - `World.MerchantRoutes`: merchant patrol routes
@@ -144,6 +150,17 @@ These tools are server-gated; non-moderators cannot activate them by firing remo
 Ports now have capture zones visible as harbor rings. A single player ship holding a port zone long enough captures that port and earns gold. Sinking another player near a port also flips that port to the attacker and grants a PvP reward.
 
 This gives flags and ship identity a gameplay surface: players can sail under a chosen flag, contest harbors, and create visible rivalries around port ownership.
+
+## Islands
+
+Each port has a larger themed island built procedurally in `WorldService`:
+
+- Docks placed beside water spawn lanes
+- Sand and grass island layers
+- Harbor towers, huts, palms, and themed landmarks
+- Treasure-search spots with `ProximityPrompt` rewards
+
+Use `X` on PC or `WALK` on touch to leave captain mode, walk around, and search for treasure.
 
 ## Ghost Ship
 

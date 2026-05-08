@@ -97,9 +97,9 @@ function ShipFactory:createShip(options)
 	local trimColor = RecipeUtil.trimColor(recipe)
 	local flagBackground, flagAccent, flagText = RecipeUtil.flagColors(recipe)
 	local ghostVisual = options.teamKind == "Ghost"
-	local deckColor = if ghostVisual then Color3.fromRGB(0, 0, 0) else Color3.fromRGB(132, 92, 52)
-	local railColor = if ghostVisual then Color3.fromRGB(0, 0, 0) else Color3.fromRGB(78, 49, 30)
-	local cabinColor = if ghostVisual then Color3.fromRGB(0, 0, 0) else Color3.fromRGB(101, 63, 38)
+	local deckColor = if ghostVisual then Color3.fromRGB(0, 0, 0) else trimColor:Lerp(Color3.fromRGB(132, 92, 52), 0.35)
+	local railColor = if ghostVisual then Color3.fromRGB(0, 0, 0) else trimColor
+	local cabinColor = if ghostVisual then Color3.fromRGB(0, 0, 0) else hullColor:Lerp(Color3.fromRGB(255, 255, 255), 0.12)
 
 	local model = Instance.new("Model")
 	model.Name = options.name or ("Ship_" .. self.nextShipId)
@@ -113,12 +113,13 @@ function ShipFactory:createShip(options)
 	model.Parent = options.parent
 
 	local root = makePart("Root", Vector3.new(width, 4, length), options.cframe, hullColor, model)
-	root.Transparency = 0.08
+	root.Transparency = 0
 	root.CustomPhysicalProperties = PhysicalProperties.new(0.7, 0.25, 0.1)
 	root:SetNetworkOwner(nil)
 	model.PrimaryPart = root
 
 	local bow = makeWedge("Bow", Vector3.new(width * 0.8, 4, 8), root.CFrame * CFrame.new(0, 0, -length / 2 - 3), hullColor, model)
+	local keel = makePart("KeelStripe", Vector3.new(width + 0.4, 0.7, length + 1), root.CFrame * CFrame.new(0, 2.15, 0), trimColor, model)
 	local deck = makePart("Deck", Vector3.new(width * 0.9, 1, length * 0.74), root.CFrame * CFrame.new(0, 2.6, 1), deckColor, model)
 	local mast = makePart("Mast", Vector3.new(1.4, 24, 1.4), root.CFrame * CFrame.new(0, 15, -2), if ghostVisual then Color3.fromRGB(0, 0, 0) else Color3.fromRGB(88, 57, 36), model)
 	local sail = makePart("Sail", Vector3.new(0.8, 15, 13), root.CFrame * CFrame.new(0, 16, -2), sailColor, model)
@@ -133,6 +134,7 @@ function ShipFactory:createShip(options)
 	local figurehead = makeWedge("Figurehead", Vector3.new(3.5, 2.5, 4), root.CFrame * CFrame.new(0, 1.8, -length / 2 - 8), trimColor, model)
 
 	weld(root, bow)
+	weld(root, keel)
 	weld(root, deck)
 	weld(root, mast)
 	weld(root, sail)

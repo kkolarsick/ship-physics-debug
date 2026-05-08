@@ -43,8 +43,19 @@ function ShipService:spawnPlayerShip(player, recipe, cframe)
 		teamKind = "Player",
 	})
 	self:register(ship)
+	self:placeCharacterOnShip(player, ship)
 	self:sendHUD(player)
 	return ship
+end
+
+function ShipService:placeCharacterOnShip(player, ship)
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if root and humanoid and ship and ship.root then
+		root.CFrame = ship.root.CFrame * CFrame.new(0, 9, 5)
+		humanoid.Sit = false
+	end
 end
 
 function ShipService:refreshPlayerShip(player)
@@ -240,6 +251,7 @@ function ShipService:start()
 				end
 
 				root.ShipBodyVelocity.Velocity = flatLook * speed * throttle
+				root.AssemblyLinearVelocity = Vector3.new(flatLook.X * speed * throttle, root.AssemblyLinearVelocity.Y, flatLook.Z * speed * throttle)
 				if ship.aiTargetPosition then
 					local offset = ship.aiTargetPosition - root.Position
 					local flat = Vector3.new(offset.X, 0, offset.Z)

@@ -15,11 +15,16 @@ GameConfig.Moderation = {
 
 GameConfig.World = {
 	WaterY = 0,
-	SpawnHeight = 8,
+	SpawnHeight = 6,
 	Ports = {
-		{ name = "Port Royal", position = Vector3.new(0, 4, 0) },
-		{ name = "Tortuga", position = Vector3.new(650, 4, -320) },
-		{ name = "Kingston", position = Vector3.new(-540, 4, 420) },
+		{ name = "Port Royal", position = Vector3.new(0, 4, 0), spawnPosition = Vector3.new(0, 6, 150), theme = "capital" },
+		{ name = "Tortuga", position = Vector3.new(650, 4, -320), spawnPosition = Vector3.new(560, 6, -205), theme = "pirate" },
+		{ name = "Kingston", position = Vector3.new(-540, 4, 420), spawnPosition = Vector3.new(-430, 6, 520), theme = "navy" },
+		{ name = "Emerald Cay", position = Vector3.new(360, 4, 520), spawnPosition = Vector3.new(470, 6, 610), theme = "jungle" },
+		{ name = "Skull Reef", position = Vector3.new(-720, 4, -220), spawnPosition = Vector3.new(-610, 6, -115), theme = "pirate" },
+		{ name = "Sunspire Atoll", position = Vector3.new(110, 4, -700), spawnPosition = Vector3.new(230, 6, -610), theme = "temple" },
+		{ name = "Frosthook Harbor", position = Vector3.new(820, 4, 210), spawnPosition = Vector3.new(700, 6, 305), theme = "navy" },
+		{ name = "Ruby Lagoon", position = Vector3.new(-230, 4, 790), spawnPosition = Vector3.new(-100, 6, 700), theme = "market" },
 	},
 	MerchantRoutes = {
 		{
@@ -77,7 +82,7 @@ GameConfig.Balance = {
 		BaseSpeed = 58,
 		SpeedPerLevel = 8,
 		TurnTorque = 85000,
-		LinearForce = 55000,
+		LinearForce = 250000,
 		MaxInputAge = 0.45,
 		SinkDelay = 5,
 		RespawnDelay = 4,
@@ -123,6 +128,11 @@ GameConfig.Balance = {
 		Speed = 82,
 		AttackRange = 80,
 		GoldLossPercent = 0.1,
+	},
+	IslandActivities = {
+		TreasureCooldown = 120,
+		TreasureMinGold = 80,
+		TreasureMaxGold = 220,
 	},
 	Boarding = {
 		DefenderHpPercentThreshold = 0.5,
