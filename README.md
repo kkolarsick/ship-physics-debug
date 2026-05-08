@@ -22,7 +22,10 @@ Server-authoritative Roblox naval combat prototype with merchant ships, boarding
 - DataStore persists `PlayerProfile` plus `ShipRecipe` only, not live part graphs.
 - Addictive progression loop: merchant-sink milestones, capture rewards, gold spend goals, and persistent upgrades.
 - Shop UI for gold cosmetics/upgrades plus Robux developer-product hooks.
+- Purchasable mast flags: country flags, pirate flag, `67`, and `41`.
 - Moderator-only live tools for cruise mode, Gold Rush, merchant convoy events, and ending events.
+- PvP port control: hold a harbor capture zone or sink enemy players near a port to flip ownership.
+- Rare Ghost Ship NPC: all-black, unkillable, one-shots ships, and removes 10% of a victim's gold.
 
 Ports and territory control are intentionally out of scope for this MVP.
 
@@ -90,6 +93,8 @@ Useful sections:
 - `Balance.Camera`: follow distance, height, look-ahead, smoothing
 - `Balance.Cannons`: cooldown, damage, projectile speed, range, pool size
 - `Balance.Merchants`: NPC count, speed, HP, reward, respawn timing
+- `Balance.PortControl`: capture radius/time and PvP port rewards
+- `Balance.GhostShip`: rare spawn rate, lifetime, speed, attack range, gold-loss percent
 - `Balance.Boarding`: grapple range, channel time, crew count, crew HP/damage, arena timeout
 - `World.Ports`: prize ship spawn locations
 - `World.MerchantRoutes`: merchant patrol routes
@@ -107,6 +112,7 @@ Set each Robux product's `productId` after creating Developer Products in the Ro
 
 Gold shop items are server-validated through `ShopService`:
 
+- Flags: Pirate, USA, United Kingdom, France, Spain, 67, 41
 - Ship skins: Crimson Corsair, Royal Navy
 - Upgrades: hull HP, cannon damage, sail speed, boarding crew
 
@@ -133,6 +139,25 @@ Moderators get a `MOD` panel in-game:
 
 These tools are server-gated; non-moderators cannot activate them by firing remotes.
 
+## PvP Port Control
+
+Ports now have capture zones visible as harbor rings. A single player ship holding a port zone long enough captures that port and earns gold. Sinking another player near a port also flips that port to the attacker and grants a PvP reward.
+
+This gives flags and ship identity a gameplay surface: players can sail under a chosen flag, contest harbors, and create visible rivalries around port ownership.
+
+## Ghost Ship
+
+The Ghost Ship is a rare world threat:
+
+- Spawns from the edge of the map on a timer with a low chance.
+- Uses an all-black ship recipe with spectral trim.
+- Ignores damage, making it effectively unbeatable.
+- Hunts the nearest player ship.
+- One-shots ships within range.
+- If it sinks a player, that player loses 10% of current gold.
+
+Tune how punishing and frequent it is in `Balance.GhostShip`.
+
 ## Persistence Model
 
 Only compact profile data is saved:
@@ -144,7 +169,9 @@ Only compact profile data is saved:
 	merchantSinks = number,
 	captures = number,
 	equippedCosmetic = string,
+	equippedFlag = string,
 	ownedCosmetics = { [cosmeticId] = true },
+	ownedFlags = { [flagId] = true },
 	activeShipIndex = number,
 	ships = { ShipRecipe }
 }

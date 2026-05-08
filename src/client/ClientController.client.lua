@@ -25,6 +25,7 @@ local state = {
 	shopPanel = nil,
 	modPanel = nil,
 	eventBanner = nil,
+	portPanel = nil,
 	shopSnapshot = nil,
 	controlMode = if UserInputService.TouchEnabled then "Touch" else "Keyboard",
 	inBoarding = false,
@@ -170,6 +171,8 @@ local function renderShop()
 			upgradeText = (" L%d/%d"):format(current or 1, item.maxLevel or 5)
 		elseif item.kind == "cosmetic" and snapshot.ownedCosmetics and snapshot.ownedCosmetics[item.cosmeticId] then
 			upgradeText = " OWNED"
+		elseif item.kind == "flag" and snapshot.ownedFlags and snapshot.ownedFlags[item.flagId] then
+			upgradeText = " OWNED"
 		end
 		makePanelButton(state.shopPanel, ("%s%s - %d gold"):format(item.name, upgradeText, item.price), function()
 			remotes.ShopPurchase:FireServer(item.id)
@@ -194,6 +197,17 @@ local function renderShop()
 			local suffix = if snapshot.equippedCosmetic == cosmeticId then " EQUIPPED" else ""
 			makePanelButton(state.shopPanel, cosmetic.name .. suffix, function()
 				remotes.EquipCosmetic:FireServer(cosmeticId)
+			end)
+		end
+	end
+
+	makePanelText(state.shopPanel, "OWNED FLAGS", 28)
+	for flagId in pairs(snapshot.ownedFlags or {}) do
+		local flag = ShopConfig.Flags[flagId]
+		if flag then
+			local suffix = if snapshot.equippedFlag == flagId then " RAISED" else ""
+			makePanelButton(state.shopPanel, flag.name .. suffix, function()
+				remotes.EquipFlag:FireServer(flagId)
 			end)
 		end
 	end
@@ -239,6 +253,10 @@ local function buildHUD()
 	state.eventBanner = makeLabel(gui, "EventBanner", UDim2.new(0.5, -220, 0, 80), UDim2.fromOffset(440, 38))
 	state.eventBanner.Text = ""
 	state.eventBanner.Visible = false
+
+	state.portPanel = makePanel(gui, "PortPanel", UDim2.new(0, 18, 1, -184), UDim2.fromOffset(260, 150))
+	state.portPanel.Visible = true
+	makePanelText(state.portPanel, "PORTS\nLoading...", 80)
 
 	state.reticle = Instance.new("Frame")
 	state.reticle.Name = "Reticle"
@@ -518,6 +536,16 @@ remotes.EventState.OnClientEvent:Connect(function(activeEvent)
 		state.eventBanner.Visible = true
 	else
 		state.eventBanner.Visible = false
+	end
+end)
+remotes.PortState.OnClientEvent:Connect(function(portState)
+	if not state.portPanel then
+		return
+	end
+	clearChildren(state.portPanel)
+	makePanelText(state.portPanel, "PORT CONTROL", 30)
+	for portName, data in pairs(portState or {}) do
+		makePanelText(state.portPanel, ("%s: %s"):format(portName, data.ownerName or "Neutral"), 28)
 	end
 end)
 

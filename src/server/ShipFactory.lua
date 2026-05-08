@@ -95,6 +95,11 @@ function ShipFactory:createShip(options)
 	local hullColor = RecipeUtil.color3FromTable(design.hullColor)
 	local sailColor = RecipeUtil.color3FromTable(design.sailColor)
 	local trimColor = RecipeUtil.trimColor(recipe)
+	local flagBackground, flagAccent, flagText = RecipeUtil.flagColors(recipe)
+	local ghostVisual = options.teamKind == "Ghost"
+	local deckColor = if ghostVisual then Color3.fromRGB(0, 0, 0) else Color3.fromRGB(132, 92, 52)
+	local railColor = if ghostVisual then Color3.fromRGB(0, 0, 0) else Color3.fromRGB(78, 49, 30)
+	local cabinColor = if ghostVisual then Color3.fromRGB(0, 0, 0) else Color3.fromRGB(101, 63, 38)
 
 	local model = Instance.new("Model")
 	model.Name = options.name or ("Ship_" .. self.nextShipId)
@@ -114,19 +119,25 @@ function ShipFactory:createShip(options)
 	model.PrimaryPart = root
 
 	local bow = makeWedge("Bow", Vector3.new(width * 0.8, 4, 8), root.CFrame * CFrame.new(0, 0, -length / 2 - 3), hullColor, model)
-	local deck = makePart("Deck", Vector3.new(width * 0.9, 1, length * 0.74), root.CFrame * CFrame.new(0, 2.6, 1), Color3.fromRGB(132, 92, 52), model)
-	local mast = makePart("Mast", Vector3.new(1.4, 24, 1.4), root.CFrame * CFrame.new(0, 15, -2), Color3.fromRGB(88, 57, 36), model)
+	local deck = makePart("Deck", Vector3.new(width * 0.9, 1, length * 0.74), root.CFrame * CFrame.new(0, 2.6, 1), deckColor, model)
+	local mast = makePart("Mast", Vector3.new(1.4, 24, 1.4), root.CFrame * CFrame.new(0, 15, -2), if ghostVisual then Color3.fromRGB(0, 0, 0) else Color3.fromRGB(88, 57, 36), model)
 	local sail = makePart("Sail", Vector3.new(0.8, 15, 13), root.CFrame * CFrame.new(0, 16, -2), sailColor, model)
 	sail.Material = Enum.Material.Fabric
-	local stern = makePart("SternCabin", Vector3.new(width * 0.72, 6, 7), root.CFrame * CFrame.new(0, 6, length / 2 - 5), Color3.fromRGB(101, 63, 38), model)
-	local railLeft = makePart("PortRail", Vector3.new(0.45, 2.1, length * 0.82), root.CFrame * CFrame.new(-width / 2 - 0.35, 4.15, 0), Color3.fromRGB(78, 49, 30), model)
-	local railRight = makePart("StarboardRail", Vector3.new(0.45, 2.1, length * 0.82), root.CFrame * CFrame.new(width / 2 + 0.35, 4.15, 0), Color3.fromRGB(78, 49, 30), model)
+	local flag = makePart("MastFlag", Vector3.new(0.35, 5, 8), root.CFrame * CFrame.new(0.25, 25, -2), flagBackground, model)
+	flag.Material = Enum.Material.Fabric
+	local flagStripe = makePart("MastFlagAccent", Vector3.new(0.38, 1.4, 8.2), root.CFrame * CFrame.new(0.28, 25, -2), flagAccent, model)
+	flagStripe.Material = Enum.Material.Fabric
+	local stern = makePart("SternCabin", Vector3.new(width * 0.72, 6, 7), root.CFrame * CFrame.new(0, 6, length / 2 - 5), cabinColor, model)
+	local railLeft = makePart("PortRail", Vector3.new(0.45, 2.1, length * 0.82), root.CFrame * CFrame.new(-width / 2 - 0.35, 4.15, 0), railColor, model)
+	local railRight = makePart("StarboardRail", Vector3.new(0.45, 2.1, length * 0.82), root.CFrame * CFrame.new(width / 2 + 0.35, 4.15, 0), railColor, model)
 	local figurehead = makeWedge("Figurehead", Vector3.new(3.5, 2.5, 4), root.CFrame * CFrame.new(0, 1.8, -length / 2 - 8), trimColor, model)
 
 	weld(root, bow)
 	weld(root, deck)
 	weld(root, mast)
 	weld(root, sail)
+	weld(root, flag)
+	weld(root, flagStripe)
 	weld(root, stern)
 	weld(root, railLeft)
 	weld(root, railRight)
@@ -134,6 +145,24 @@ function ShipFactory:createShip(options)
 
 	makeRope("RiggingLeft", root, root.CFrame * CFrame.new(-3.8, 16, -2) * CFrame.Angles(0, 0, math.rad(23)), 26, model)
 	makeRope("RiggingRight", root, root.CFrame * CFrame.new(3.8, 16, -2) * CFrame.Angles(0, 0, math.rad(-23)), 26, model)
+
+	if flagText ~= "" then
+		local gui = Instance.new("SurfaceGui")
+		gui.Name = "FlagText"
+		gui.Face = Enum.NormalId.Right
+		gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+		gui.PixelsPerStud = 35
+		gui.Parent = flag
+
+		local label = Instance.new("TextLabel")
+		label.BackgroundTransparency = 1
+		label.Size = UDim2.fromScale(1, 1)
+		label.Font = Enum.Font.GothamBlack
+		label.Text = flagText
+		label.TextColor3 = flagAccent
+		label.TextScaled = true
+		label.Parent = gui
+	end
 
 	for _, side in ipairs({ -1, 1 }) do
 		local lantern = makePart("Lantern", Vector3.new(1, 1, 1), root.CFrame * CFrame.new(side * (width / 2 - 2), 7, length / 2 - 1), Color3.fromRGB(255, 183, 83), model)
@@ -197,6 +226,7 @@ function ShipFactory:createShip(options)
 		lastFire = 0,
 		isMerchant = options.teamKind == "Merchant",
 		isPrize = options.teamKind == "Prize",
+		isGhost = options.teamKind == "Ghost",
 	}
 end
 

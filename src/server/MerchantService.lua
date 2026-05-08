@@ -49,7 +49,7 @@ function MerchantService:start()
 		self:spawn(index)
 	end
 
-	self.shipService.onShipSunk = function(ship)
+	self.shipService:onShipSunk(function(ship)
 		local merchant = self.merchants[ship.id]
 		if merchant then
 			self.merchants[ship.id] = nil
@@ -57,7 +57,7 @@ function MerchantService:start()
 				self:spawn(merchant.index)
 			end)
 		end
-	end
+	end)
 
 	task.spawn(function()
 		while true do
@@ -71,8 +71,7 @@ function MerchantService:start()
 					if flat.Magnitude < GameConfig.Balance.Merchants.RouteArriveDistance then
 						merchant.waypoint = (merchant.waypoint % #merchant.route) + 1
 					else
-						local lookAt = ship.root.Position + flat.Unit
-						ship.root.ShipBodyGyro.CFrame = CFrame.new(ship.root.Position, lookAt)
+						ship.aiTargetPosition = goal
 						ship.input.throttle = 1
 						ship.input.turn = 0
 						ship.input.last = os.clock()

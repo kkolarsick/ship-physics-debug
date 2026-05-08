@@ -16,8 +16,12 @@ function ShipService.new(shipFactory, worldService, profileService, remotes)
 		shipsByModel = {},
 		shipsByPlayer = {},
 		ships = {},
-		onShipSunk = nil,
+		sinkCallbacks = {},
 	}, ShipService)
+end
+
+function ShipService:onShipSunk(callback)
+	table.insert(self.sinkCallbacks, callback)
 end
 
 function ShipService:register(ship)
@@ -82,6 +86,19 @@ function ShipService:spawnMerchant(name, recipe, cframe)
 	return ship
 end
 
+function ShipService:spawnGhostShip(recipe, cframe)
+	local ship = self.shipFactory:createShip({
+		name = "GhostShip",
+		recipe = recipe,
+		cframe = cframe,
+		parent = self.worldService:getFolder("GhostShips"),
+		teamKind = "Ghost",
+		maxHP = GameConfig.Balance.GhostShip.HP,
+	})
+	self:register(ship)
+	return ship
+end
+
 function ShipService:getPlayerShip(player)
 	return self.shipsByPlayer[player]
 end
@@ -124,6 +141,9 @@ function ShipService:damageShip(target, amount, attacker)
 	if not target or target.model:GetAttribute("Sunk") then
 		return
 	end
+	if target.isGhost then
+		return
+	end
 
 	local hp = math.max(0, target.model:GetAttribute("HP") - amount)
 	target.model:SetAttribute("HP", hp)
@@ -162,8 +182,8 @@ function ShipService:sinkShip(ship, attacker)
 		self:sendHUD(attacker.owner)
 	end
 
-	if self.onShipSunk then
-		self.onShipSunk(ship, attacker)
+	for _, callback in ipairs(self.sinkCallbacks) do
+		task.spawn(callback, ship, attacker)
 	end
 
 	task.delay(GameConfig.Balance.Ship.SinkDelay, function()
@@ -205,6 +225,9 @@ function ShipService:start()
 				local throttle = if stale then 0 else ship.input.throttle
 				local turn = if stale then 0 else ship.input.turn
 				local speed = ship.isMerchant and GameConfig.Balance.Merchants.Speed or RecipeUtil.maxSpeed(ship.recipe)
+				if ship.isGhost then
+					speed = GameConfig.Balance.GhostShip.Speed
+				end
 				if ship.model:GetAttribute("ModeratorCruise") then
 					speed = GameConfig.Moderation.CruiseSpeed
 				end
@@ -217,7 +240,15 @@ function ShipService:start()
 				end
 
 				root.ShipBodyVelocity.Velocity = flatLook * speed * throttle
-				root.ShipBodyGyro.CFrame = root.CFrame * CFrame.Angles(0, -turn * 0.045, 0)
+				if ship.aiTargetPosition then
+					local offset = ship.aiTargetPosition - root.Position
+					local flat = Vector3.new(offset.X, 0, offset.Z)
+					if flat.Magnitude > 1 then
+						root.ShipBodyGyro.CFrame = CFrame.new(root.Position, root.Position + flat.Unit)
+					end
+				else
+					root.ShipBodyGyro.CFrame = root.CFrame * CFrame.Angles(0, -turn * 0.045, 0)
+				end
 			end
 		end
 	end)

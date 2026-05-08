@@ -16,7 +16,11 @@ local function newProfile()
 		merchantSinks = 0,
 		captures = 0,
 		equippedCosmetic = "default",
+		equippedFlag = "default",
 		ownedCosmetics = {
+			default = true,
+		},
+		ownedFlags = {
 			default = true,
 		},
 		purchaseHistory = {},
@@ -46,8 +50,11 @@ function ProfileService:load(player)
 	end
 	profile.ownedCosmetics = if typeof(profile.ownedCosmetics) == "table" then profile.ownedCosmetics else { default = true }
 	profile.ownedCosmetics.default = true
+	profile.ownedFlags = if typeof(profile.ownedFlags) == "table" then profile.ownedFlags else { default = true }
+	profile.ownedFlags.default = true
 	profile.purchaseHistory = if typeof(profile.purchaseHistory) == "table" then profile.purchaseHistory else {}
 	profile.equippedCosmetic = profile.equippedCosmetic or "default"
+	profile.equippedFlag = profile.equippedFlag or "default"
 	profile.gold = tonumber(profile.gold) or 0
 	profile.totalGoldEarned = tonumber(profile.totalGoldEarned) or profile.gold
 	profile.merchantSinks = tonumber(profile.merchantSinks) or 0
@@ -61,6 +68,9 @@ function ProfileService:load(player)
 		recipe.upgrades.crew = tonumber(recipe.upgrades.crew) or 1
 		if not recipe.cosmeticId then
 			RecipeUtil.applyCosmetic(recipe, profile.equippedCosmetic)
+		end
+		if not recipe.flagId then
+			RecipeUtil.applyFlag(recipe, profile.equippedFlag)
 		end
 	end
 
@@ -93,7 +103,9 @@ function ProfileService:getSnapshot(player)
 		merchantSinks = profile.merchantSinks,
 		captures = profile.captures,
 		equippedCosmetic = profile.equippedCosmetic,
+		equippedFlag = profile.equippedFlag,
 		ownedCosmetics = profile.ownedCosmetics,
+		ownedFlags = profile.ownedFlags,
 		activeUpgrades = recipe.upgrades,
 		products = ShopConfig.productsList(),
 		goldItems = ShopConfig.goldItemsList(),
@@ -120,6 +132,17 @@ function ProfileService:spendGold(player, amount)
 	profile.gold -= amount
 	self.dirty[player] = true
 	return true
+end
+
+function ProfileService:removeGoldPercent(player, percent)
+	local profile = self:get(player)
+	if not profile then
+		return 0
+	end
+	local loss = math.floor(profile.gold * percent)
+	profile.gold = math.max(0, profile.gold - loss)
+	self.dirty[player] = true
+	return loss
 end
 
 function ProfileService:addShipRecipe(player, recipe)
@@ -161,6 +184,16 @@ function ProfileService:grantCosmetic(player, cosmeticId)
 	return true
 end
 
+function ProfileService:grantFlag(player, flagId)
+	local profile = self:get(player)
+	if not profile or not ShopConfig.Flags[flagId] then
+		return false
+	end
+	profile.ownedFlags[flagId] = true
+	self.dirty[player] = true
+	return true
+end
+
 function ProfileService:equipCosmetic(player, cosmeticId)
 	local profile = self:get(player)
 	if not profile or not profile.ownedCosmetics[cosmeticId] then
@@ -169,6 +202,18 @@ function ProfileService:equipCosmetic(player, cosmeticId)
 	profile.equippedCosmetic = cosmeticId
 	local recipe = self:getActiveRecipe(player)
 	RecipeUtil.applyCosmetic(recipe, cosmeticId)
+	self.dirty[player] = true
+	return true
+end
+
+function ProfileService:equipFlag(player, flagId)
+	local profile = self:get(player)
+	if not profile or not profile.ownedFlags[flagId] then
+		return false
+	end
+	profile.equippedFlag = flagId
+	local recipe = self:getActiveRecipe(player)
+	RecipeUtil.applyFlag(recipe, flagId)
 	self.dirty[player] = true
 	return true
 end

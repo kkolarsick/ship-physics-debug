@@ -33,6 +33,12 @@ function RecipeUtil.applyCosmetic(recipe, cosmeticId)
 	return recipe
 end
 
+function RecipeUtil.applyFlag(recipe, flagId)
+	local flag = ShopConfig.Flags[flagId or "default"] or ShopConfig.Flags.default
+	recipe.flagId = flag.id
+	return recipe
+end
+
 function RecipeUtil.prizeFromRecipe(recipe)
 	local prize = RecipeUtil.deepCopy(recipe)
 	prize.id = ("%s_%d"):format(recipe.id or "ship", os.time())
@@ -53,6 +59,11 @@ end
 function RecipeUtil.trimColor(recipe)
 	local design = recipe.design or {}
 	return RecipeUtil.color3FromTable(design.trimColor or { r = 214, g = 156, b = 62 })
+end
+
+function RecipeUtil.flagColors(recipe)
+	local flag = ShopConfig.Flags[(recipe and recipe.flagId) or "default"] or ShopConfig.Flags.default
+	return RecipeUtil.color3FromTable(flag.background), RecipeUtil.color3FromTable(flag.accent), flag.text or ""
 end
 
 function RecipeUtil.maxHP(recipe)

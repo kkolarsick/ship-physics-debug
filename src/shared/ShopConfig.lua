@@ -56,6 +56,62 @@ ShopConfig.Products = {
 }
 
 ShopConfig.GoldItems = {
+	PirateFlag = {
+		id = "flag_pirate",
+		name = "Pirate Flag",
+		description = "Classic black pirate flag.",
+		kind = "flag",
+		price = 275,
+		flagId = "pirate",
+	},
+	UsaFlag = {
+		id = "flag_usa",
+		name = "USA Flag",
+		description = "Stars and stripes for your mast.",
+		kind = "flag",
+		price = 275,
+		flagId = "usa",
+	},
+	UnitedKingdomFlag = {
+		id = "flag_uk",
+		name = "United Kingdom Flag",
+		description = "Union flag for your ship.",
+		kind = "flag",
+		price = 275,
+		flagId = "uk",
+	},
+	FranceFlag = {
+		id = "flag_france",
+		name = "France Flag",
+		description = "Blue, white, and red tricolor.",
+		kind = "flag",
+		price = 275,
+		flagId = "france",
+	},
+	SpainFlag = {
+		id = "flag_spain",
+		name = "Spain Flag",
+		description = "Red and gold naval colors.",
+		kind = "flag",
+		price = 275,
+		flagId = "spain",
+	},
+	Flag67 = {
+		id = "flag_67",
+		name = "67 Flag",
+		description = "Bold 67 battle flag.",
+		kind = "flag",
+		price = 350,
+		flagId = "flag67",
+	},
+	Flag41 = {
+		id = "flag_41",
+		name = "41 Flag",
+		description = "Bold 41 battle flag.",
+		kind = "flag",
+		price = 350,
+		flagId = "flag41",
+	},
 	CrimsonHull = {
 		id = "crimson_hull",
 		name = "Crimson Corsair Skin",
@@ -107,6 +163,65 @@ ShopConfig.GoldItems = {
 		price = 400,
 		upgradeKey = "crew",
 		maxLevel = 5,
+	},
+}
+
+ShopConfig.Flags = {
+	default = {
+		id = "default",
+		name = "Plain Pennant",
+		background = { r = 236, g = 232, b = 214 },
+		accent = { r = 93, g = 54, b = 31 },
+		text = "",
+	},
+	pirate = {
+		id = "pirate",
+		name = "Pirate Flag",
+		background = { r = 8, g = 8, b = 10 },
+		accent = { r = 245, g = 245, b = 235 },
+		text = "JOLLY",
+	},
+	usa = {
+		id = "usa",
+		name = "USA Flag",
+		background = { r = 178, g = 34, b = 52 },
+		accent = { r = 60, g = 59, b = 110 },
+		text = "USA",
+	},
+	uk = {
+		id = "uk",
+		name = "United Kingdom Flag",
+		background = { r = 1, g = 33, b = 105 },
+		accent = { r = 200, g = 16, b = 46 },
+		text = "UK",
+	},
+	france = {
+		id = "france",
+		name = "France Flag",
+		background = { r = 0, g = 85, b = 164 },
+		accent = { r = 239, g = 65, b = 53 },
+		text = "FR",
+	},
+	spain = {
+		id = "spain",
+		name = "Spain Flag",
+		background = { r = 198, g = 11, b = 30 },
+		accent = { r = 255, g = 196, b = 0 },
+		text = "ES",
+	},
+	flag67 = {
+		id = "flag67",
+		name = "67 Flag",
+		background = { r = 20, g = 20, b = 24 },
+		accent = { r = 255, g = 209, b = 83 },
+		text = "67",
+	},
+	flag41 = {
+		id = "flag41",
+		name = "41 Flag",
+		background = { r = 20, g = 20, b = 24 },
+		accent = { r = 113, g = 207, b = 222 },
+		text = "41",
 	},
 }
 

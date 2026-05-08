@@ -24,6 +24,10 @@ function ShopService:start()
 		self:equipCosmetic(player, cosmeticId)
 	end)
 
+	self.remotes.EquipFlag.OnServerEvent:Connect(function(player, flagId)
+		self:equipFlag(player, flagId)
+	end)
+
 	MarketplaceService.ProcessReceipt = function(receiptInfo)
 		return self:processReceipt(receiptInfo)
 	end
@@ -57,6 +61,21 @@ function ShopService:buyGoldItem(player, itemId)
 		self.profileService:equipCosmetic(player, item.cosmeticId)
 		self.shipService:refreshPlayerShip(player)
 		self.remotes.Notify:FireClient(player, item.name .. " equipped.")
+	elseif item.kind == "flag" then
+		local profile = self.profileService:get(player)
+		if profile and profile.ownedFlags[item.flagId] then
+			self.remotes.Notify:FireClient(player, "Already owned.")
+			self:sendState(player)
+			return
+		end
+		if not self.profileService:spendGold(player, item.price) then
+			self.remotes.Notify:FireClient(player, "Not enough gold.")
+			return
+		end
+		self.profileService:grantFlag(player, item.flagId)
+		self.profileService:equipFlag(player, item.flagId)
+		self.shipService:refreshPlayerShip(player)
+		self.remotes.Notify:FireClient(player, item.name .. " raised.")
 	elseif item.kind == "upgrade" then
 		if not self.profileService:spendGold(player, item.price) then
 			self.remotes.Notify:FireClient(player, "Not enough gold.")
@@ -82,6 +101,14 @@ function ShopService:equipCosmetic(player, cosmeticId)
 	if self.profileService:equipCosmetic(player, cosmeticId) then
 		self.shipService:refreshPlayerShip(player)
 		self.remotes.Notify:FireClient(player, "Ship skin equipped.")
+		self:sendState(player)
+	end
+end
+
+function ShopService:equipFlag(player, flagId)
+	if self.profileService:equipFlag(player, flagId) then
+		self.shipService:refreshPlayerShip(player)
+		self.remotes.Notify:FireClient(player, "Flag raised.")
 		self:sendState(player)
 	end
 end

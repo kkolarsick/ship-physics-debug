@@ -109,6 +109,21 @@ GameConfig.Balance = {
 		RouteArriveDistance = 28,
 		RespawnDelay = 10,
 	},
+	PortControl = {
+		CaptureRadius = 95,
+		CaptureSeconds = 12,
+		CaptureRewardGold = 300,
+		PvpSinkRewardGold = 250,
+	},
+	GhostShip = {
+		SpawnInterval = 150,
+		SpawnChance = 0.22,
+		ActiveSeconds = 90,
+		HP = 999999,
+		Speed = 82,
+		AttackRange = 80,
+		GoldLossPercent = 0.1,
+	},
 	Boarding = {
 		DefenderHpPercentThreshold = 0.5,
 		GrappleRange = 70,
