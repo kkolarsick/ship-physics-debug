@@ -19,7 +19,7 @@ Server-authoritative Roblox naval combat prototype with merchant ships, boarding
 - Boarding gate: defender must be below 50% HP and within grapple range.
 - Instanced boarding arena with defender crew NPCs.
 - Capture semantics: winner receives a copied `ShipRecipe`; a fresh prize ship spawns at nearest port.
-- DataStore persists `PlayerProfile` plus `ShipRecipe` only, not live part graphs.
+- DataStore persists `PlayerProfile` plus `ShipRecipe` only, not live part graphs, with autosave, leave-save, shutdown-save, retries, and failed-load overwrite protection.
 - Addictive progression loop: merchant-sink milestones, capture rewards, gold spend goals, and persistent upgrades.
 - Shop UI for gold cosmetics/upgrades plus Robux developer-product hooks.
 - Store access is now a physical trading post on each island, not a global button.
@@ -54,6 +54,8 @@ rojo serve
 7. Press Play with at least one test player.
 
 For DataStore testing in Studio, publish the place and enable API Services in Game Settings. Without that, the fallback profile still lets you test the live loop, but saves may fail in Studio.
+
+Player data saves through Roblox DataStore on autosave, player leave, and server shutdown. If a DataStore load fails, the player gets a temporary session profile, but that session is not written back over their real saved data.
 
 The project uses `default.project.json` to map:
 
@@ -219,6 +221,9 @@ Only compact profile data is saved:
 
 ```lua
 {
+	profileVersion = number,
+	createdAt = number,
+	lastSaveUnix = number,
 	gold = number,
 	totalGoldEarned = number,
 	merchantSinks = number,
@@ -227,12 +232,23 @@ Only compact profile data is saved:
 	equippedFlag = string,
 	ownedCosmetics = { [cosmeticId] = true },
 	ownedFlags = { [flagId] = true },
+	ownedGear = { [gearId] = true },
+	ownedShipClasses = { [classId] = true },
 	activeShipIndex = number,
 	ships = { ShipRecipe }
 }
 ```
 
 Live ship instances, procedural parts, constraints, cannonballs, NPCs, and arenas are never saved. On spawn, the server rebuilds the live model from the selected `ShipRecipe`.
+
+Saves run in `ProfileService`:
+
+- `load(player)`: loads and migrates profile data.
+- `startAutosave()`: saves dirty profiles every `GameConfig.DataStore.SaveInterval` seconds.
+- `release(player)`: saves when a player leaves.
+- `BindToClose`: saves all loaded players during server shutdown.
+
+Tune retry behavior in `GameConfig.DataStore`.
 
 ## Capture Rule
 

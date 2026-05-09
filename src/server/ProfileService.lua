@@ -9,8 +9,27 @@ ProfileService.__index = ProfileService
 
 local store = DataStoreService:GetDataStore(GameConfig.DataStore.ProfileName)
 
+local function retryDataStore(label, callback)
+	local lastErr
+	for attempt = 1, GameConfig.DataStore.MaxRetries do
+		local ok, result = pcall(callback)
+		if ok then
+			return true, result
+		end
+		lastErr = result
+		warn(("[ProfileService] %s failed attempt %d/%d: %s"):format(label, attempt, GameConfig.DataStore.MaxRetries, tostring(result)))
+		if attempt < GameConfig.DataStore.MaxRetries then
+			task.wait(GameConfig.DataStore.RetryDelay)
+		end
+	end
+	return false, lastErr
+end
+
 local function newProfile()
 	return {
+		profileVersion = GameConfig.DataStore.ProfileVersion,
+		createdAt = os.time(),
+		lastSaveUnix = 0,
 		gold = 0,
 		totalGoldEarned = 0,
 		merchantSinks = 0,
@@ -38,19 +57,25 @@ function ProfileService.new()
 	return setmetatable({
 		profiles = {},
 		dirty = {},
+		loadFailed = {},
+		lastSaveError = {},
 	}, ProfileService)
 end
 
 function ProfileService:load(player)
 	local key = "player_" .. player.UserId
-	local ok, data = pcall(function()
+	local ok, data = retryDataStore("Load " .. player.UserId, function()
 		return store:GetAsync(key)
 	end)
 
 	local profile = if ok and typeof(data) == "table" then data else newProfile()
+	self.loadFailed[player] = not ok
 	if typeof(profile.ships) ~= "table" or #profile.ships == 0 then
 		profile.ships = { RecipeUtil.defaultRecipe() }
 	end
+	profile.profileVersion = tonumber(profile.profileVersion) or 1
+	profile.createdAt = tonumber(profile.createdAt) or os.time()
+	profile.lastSaveUnix = tonumber(profile.lastSaveUnix) or 0
 	profile.ownedCosmetics = if typeof(profile.ownedCosmetics) == "table" then profile.ownedCosmetics else { default = true }
 	profile.ownedCosmetics.default = true
 	profile.ownedFlags = if typeof(profile.ownedFlags) == "table" then profile.ownedFlags else { default = true }
@@ -69,6 +94,10 @@ function ProfileService:load(player)
 		profile.gold = 0
 		profile.totalGoldEarned = 0
 		profile.economyVersion = 2
+		migrated = true
+	end
+	if profile.profileVersion ~= GameConfig.DataStore.ProfileVersion then
+		profile.profileVersion = GameConfig.DataStore.ProfileVersion
 		migrated = true
 	end
 	profile.activeShipIndex = math.clamp(tonumber(profile.activeShipIndex) or 1, 1, #profile.ships)
@@ -91,7 +120,7 @@ function ProfileService:load(player)
 	end
 
 	self.profiles[player] = profile
-	self.dirty[player] = migrated
+	self.dirty[player] = migrated and not self.loadFailed[player]
 	return profile
 end
 
@@ -320,17 +349,27 @@ end
 function ProfileService:save(player)
 	local profile = self.profiles[player]
 	if not profile then
-		return
+		return false
+	end
+	if self.loadFailed[player] then
+		warn("[ProfileService] Save skipped because profile load failed", player)
+		return false
 	end
 
 	local key = "player_" .. player.UserId
-	local ok, err = pcall(function()
-		store:SetAsync(key, profile)
+	profile.lastSaveUnix = os.time()
+	local snapshot = RecipeUtil.deepCopy(profile)
+	local ok, err = retryDataStore("Save " .. player.UserId, function()
+		store:SetAsync(key, snapshot)
 	end)
 	if ok then
 		self.dirty[player] = false
+		self.lastSaveError[player] = nil
+		return true
 	else
 		warn("[ProfileService] Save failed", player, err)
+		self.lastSaveError[player] = err
+		return false
 	end
 end
 
@@ -338,6 +377,8 @@ function ProfileService:release(player)
 	self:save(player)
 	self.profiles[player] = nil
 	self.dirty[player] = nil
+	self.loadFailed[player] = nil
+	self.lastSaveError[player] = nil
 end
 
 function ProfileService:startAutosave()

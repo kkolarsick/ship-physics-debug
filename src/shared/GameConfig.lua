@@ -2,7 +2,10 @@ local GameConfig = {}
 
 GameConfig.DataStore = {
 	ProfileName = "PirateShipPvP_Profile_v1",
+	ProfileVersion = 3,
 	SaveInterval = 60,
+	MaxRetries = 3,
+	RetryDelay = 2,
 }
 
 GameConfig.Moderation = {
