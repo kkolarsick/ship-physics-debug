@@ -33,6 +33,7 @@ Server-authoritative Roblox naval combat prototype with merchant ships, boarding
 - PvP port control: hold a harbor capture zone or sink enemy players near a port to flip ownership.
 - Rare Ghost Ship NPC: all-black, unkillable, one-shots ships, and removes 10% of a victim's gold.
 - Eight distinct ports with larger islands, docks, towers, huts, palms, themed landmarks, and treasure-search spots.
+- Random treasure maps from island searches that bury gold caches at random island locations.
 - Marine outposts at sea with watch towers, docks, beacon lights, and cannon silhouettes.
 - Royal Navy patrol encounters that hunt players; defeating one grants random gold and may add a crew member.
 - Rare Kraken encounter that attacks player ships; defeating it pays a large gold reward, but losing to it wipes current gold.
@@ -115,7 +116,7 @@ Useful sections:
 - `Balance.GhostShip`: rare spawn rate, lifetime, speed, attack range, gold-loss percent
 - `Balance.RoyalNavy`: patrol spawn rate, HP, speed, attack damage, gold rewards, crew reward chance
 - `Balance.Kraken`: spawn rate, HP, speed, attack damage, lifetime, victory reward
-- `Balance.IslandActivities`: treasure-search cooldown and reward range
+- `Balance.IslandActivities`: treasure-search cooldown, treasure map chance, active map cap, and buried treasure reward range
 - `Balance.Boarding`: grapple range, channel time, crew count, crew HP/damage, arena timeout
 - `World.Ports`: prize ship spawn locations
 - `World.MarineOutposts`: sea outpost locations
@@ -194,6 +195,9 @@ Each port has a larger themed island built procedurally in `WorldService`:
 - Sand and grass island layers
 - Harbor towers, huts, palms, and themed landmarks
 - Treasure-search spots with `ProximityPrompt` rewards
+- Treasure maps that point players to random buried caches on islands
+
+Treasure searches can reveal a map in addition to small gold. Each map creates a buried treasure marker at a random island location, and digging it awards a random gold payout. Tune map odds, active map cap, and buried treasure gold in `Balance.IslandActivities`.
 
 Use `X` on PC or `WALK` on touch to leave captain mode, walk around, and search for treasure.
 
