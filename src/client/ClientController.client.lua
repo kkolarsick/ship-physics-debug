@@ -2,6 +2,7 @@ local Players = game:GetService("Players")
 local MarketplaceService = game:GetService("MarketplaceService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
@@ -21,6 +22,7 @@ local state = {
 	touchTurn = 0,
 	target = nil,
 	hud = nil,
+	hpFill = nil,
 	notice = nil,
 	reticle = nil,
 	board = nil,
@@ -43,18 +45,91 @@ local findTargetFromMouse
 local findTargetFromScreenPoint
 local showNotice
 
+local UI = {
+	bg = Color3.fromRGB(9, 14, 20),
+	panel = Color3.fromRGB(18, 27, 35),
+	panelSoft = Color3.fromRGB(29, 41, 51),
+	button = Color3.fromRGB(35, 50, 61),
+	buttonHot = Color3.fromRGB(52, 74, 86),
+	gold = Color3.fromRGB(245, 187, 74),
+	cream = Color3.fromRGB(255, 246, 220),
+	muted = Color3.fromRGB(169, 186, 196),
+	blue = Color3.fromRGB(76, 169, 214),
+	green = Color3.fromRGB(92, 210, 141),
+	danger = Color3.fromRGB(230, 91, 74),
+}
+
+local function addCorner(instance, radius)
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, radius or 8)
+	corner.Parent = instance
+	return corner
+end
+
+local function addStroke(instance, color, thickness, transparency)
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = color or UI.gold
+	stroke.Thickness = thickness or 1
+	stroke.Transparency = transparency or 0.35
+	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	stroke.Parent = instance
+	return stroke
+end
+
+local function addGradient(instance, top, bottom, rotation)
+	local gradient = Instance.new("UIGradient")
+	gradient.Color = ColorSequence.new(top, bottom)
+	gradient.Rotation = rotation or 90
+	gradient.Parent = instance
+	return gradient
+end
+
+local function addTextConstraint(instance, minSize, maxSize)
+	local constraint = Instance.new("UITextSizeConstraint")
+	constraint.MinTextSize = minSize or 12
+	constraint.MaxTextSize = maxSize or 22
+	constraint.Parent = instance
+	return constraint
+end
+
+local function addShadow(parent, target)
+	local shadow = Instance.new("Frame")
+	shadow.Name = target.Name .. "Shadow"
+	shadow.AnchorPoint = target.AnchorPoint
+	shadow.Position = UDim2.new(target.Position.X.Scale, target.Position.X.Offset, target.Position.Y.Scale, target.Position.Y.Offset + 4)
+	shadow.Size = target.Size
+	shadow.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+	shadow.BackgroundTransparency = 0.78
+	shadow.BorderSizePixel = 0
+	shadow.ZIndex = math.max(0, target.ZIndex - 1)
+	shadow.Parent = parent
+	addCorner(shadow, 8)
+	return shadow
+end
+
+local function tween(instance, goal, seconds)
+	TweenService:Create(instance, TweenInfo.new(seconds or 0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), goal):Play()
+end
+
 local function makeLabel(parent, name, position, size)
 	local label = Instance.new("TextLabel")
 	label.Name = name
-	label.BackgroundTransparency = 0.25
-	label.BackgroundColor3 = Color3.fromRGB(15, 18, 22)
+	label.BackgroundTransparency = 0.08
+	label.BackgroundColor3 = UI.panel
 	label.BorderSizePixel = 0
 	label.Position = position
 	label.Size = size
-	label.Font = Enum.Font.GothamBold
-	label.TextColor3 = Color3.fromRGB(245, 242, 232)
+	label.Font = Enum.Font.GothamMedium
+	label.TextColor3 = UI.cream
 	label.TextScaled = true
+	label.TextWrapped = true
+	label.RichText = true
+	label.ZIndex = 5
 	label.Parent = parent
+	addCorner(label, 8)
+	addStroke(label, UI.gold, 1, 0.55)
+	addGradient(label, UI.panelSoft, UI.panel, 90)
+	addTextConstraint(label, 11, 23)
 	return label
 end
 
@@ -65,31 +140,42 @@ local function makeButton(parent, name, text, position, size)
 	button.AnchorPoint = Vector2.new(0.5, 0.5)
 	button.Position = position
 	button.Size = size
-	button.BackgroundColor3 = Color3.fromRGB(22, 29, 36)
-	button.BackgroundTransparency = 0.12
+	button.BackgroundColor3 = UI.button
+	button.BackgroundTransparency = 0.03
 	button.BorderSizePixel = 0
 	button.Font = Enum.Font.GothamBlack
-	button.TextColor3 = Color3.fromRGB(255, 244, 216)
+	button.TextColor3 = UI.cream
 	button.TextScaled = true
+	button.TextWrapped = true
+	button.RichText = true
 	button.AutoButtonColor = true
+	button.ZIndex = 8
 	button.Parent = parent
+	addShadow(parent, button)
 
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(1, 0)
-	corner.Parent = button
-
-	local stroke = Instance.new("UIStroke")
-	stroke.Color = Color3.fromRGB(255, 190, 90)
-	stroke.Thickness = 2
-	stroke.Transparency = 0.25
-	stroke.Parent = button
+	addCorner(button, 12)
+	addStroke(button, UI.gold, 2, 0.25)
+	addGradient(button, UI.buttonHot, UI.button, 90)
+	addTextConstraint(button, 10, 20)
+	button.MouseEnter:Connect(function()
+		tween(button, { BackgroundColor3 = UI.buttonHot }, 0.12)
+	end)
+	button.MouseLeave:Connect(function()
+		tween(button, { BackgroundColor3 = UI.button }, 0.12)
+	end)
+	button.MouseButton1Down:Connect(function()
+		tween(button, { Size = UDim2.new(size.X.Scale, size.X.Offset - 3, size.Y.Scale, size.Y.Offset - 3) }, 0.06)
+	end)
+	button.MouseButton1Up:Connect(function()
+		tween(button, { Size = size }, 0.08)
+	end)
 
 	return button
 end
 
 local function clearChildren(parent)
 	for _, child in ipairs(parent:GetChildren()) do
-		if not child:IsA("UIListLayout") and not child:IsA("UIPadding") and not child:IsA("UICorner") and not child:IsA("UIStroke") then
+		if not child:IsA("UIListLayout") and not child:IsA("UIPadding") and not child:IsA("UICorner") and not child:IsA("UIStroke") and not child:IsA("UIGradient") then
 			child:Destroy()
 		end
 	end
@@ -103,21 +189,19 @@ local function makePanel(parent, name, position, size)
 	panel.CanvasSize = UDim2.fromScale(0, 0)
 	panel.AutomaticCanvasSize = Enum.AutomaticSize.Y
 	panel.ScrollBarThickness = 6
-	panel.BackgroundColor3 = Color3.fromRGB(13, 18, 24)
-	panel.BackgroundTransparency = 0.08
+	panel.ScrollBarImageColor3 = UI.gold
+	panel.BackgroundColor3 = UI.panel
+	panel.BackgroundTransparency = 0.03
 	panel.BorderSizePixel = 0
 	panel.Visible = false
+	panel.ClipsDescendants = true
+	panel.ZIndex = 4
 	panel.Parent = parent
 
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 8)
-	corner.Parent = panel
-
-	local stroke = Instance.new("UIStroke")
-	stroke.Color = Color3.fromRGB(255, 190, 90)
-	stroke.Thickness = 2
-	stroke.Transparency = 0.35
-	stroke.Parent = panel
+	addShadow(parent, panel)
+	addCorner(panel, 10)
+	addStroke(panel, UI.gold, 1.5, 0.38)
+	addGradient(panel, UI.panelSoft, UI.bg, 90)
 
 	local padding = Instance.new("UIPadding")
 	padding.PaddingTop = UDim.new(0, 10)
@@ -136,20 +220,36 @@ end
 
 local function makePanelButton(parent, text, callback)
 	local button = Instance.new("TextButton")
-	button.Size = UDim2.new(1, 0, 0, 42)
-	button.BackgroundColor3 = Color3.fromRGB(33, 43, 52)
-	button.BackgroundTransparency = 0.05
+	button.Size = UDim2.new(1, 0, 0, 46)
+	button.BackgroundColor3 = UI.button
+	button.BackgroundTransparency = 0.02
 	button.BorderSizePixel = 0
-	button.Font = Enum.Font.GothamBold
-	button.TextColor3 = Color3.fromRGB(255, 244, 216)
+	button.Font = Enum.Font.GothamMedium
+	button.TextColor3 = UI.cream
 	button.TextScaled = true
 	button.TextWrapped = true
+	button.RichText = true
 	button.Text = text
+	button.TextXAlignment = Enum.TextXAlignment.Left
+	button.ZIndex = 6
 	button.Parent = parent
 
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 6)
-	corner.Parent = button
+	addCorner(button, 8)
+	addStroke(button, UI.gold, 1, 0.68)
+	addGradient(button, UI.buttonHot, UI.button, 90)
+	addTextConstraint(button, 11, 18)
+
+	local padding = Instance.new("UIPadding")
+	padding.PaddingLeft = UDim.new(0, 12)
+	padding.PaddingRight = UDim.new(0, 12)
+	padding.Parent = button
+
+	button.MouseEnter:Connect(function()
+		tween(button, { BackgroundColor3 = UI.buttonHot }, 0.12)
+	end)
+	button.MouseLeave:Connect(function()
+		tween(button, { BackgroundColor3 = UI.button }, 0.12)
+	end)
 
 	button.Activated:Connect(callback)
 	return button
@@ -170,33 +270,50 @@ local function renderShop()
 
 	clearChildren(state.shopPanel)
 	local snapshot = state.shopSnapshot
-	makePanelText(state.shopPanel, ("SHOP  Gold: %d"):format(snapshot.gold or 0), 34)
+	makePanelText(state.shopPanel, ("<font color=\"#F5BB4A\"><b>TRADING POST</b></font>   Gold: %d"):format(snapshot.gold or 0), 38)
 	makePanelButton(state.shopPanel, "Close Trading Post", function()
 		state.shopPanel.Visible = false
 	end)
 
-	for _, item in ipairs(snapshot.goldItems or {}) do
-		local upgradeText = ""
-		local displayPrice = item.price
-		if item.kind == "upgrade" then
-			local current = snapshot.activeUpgrades and snapshot.activeUpgrades[item.upgradeKey] or 1
-			displayPrice = ShopConfig.upgradePrice(item, current)
-			upgradeText = (" L%d/%d"):format(current or 1, item.maxLevel or 5)
-		elseif item.kind == "cosmetic" and snapshot.ownedCosmetics and snapshot.ownedCosmetics[item.cosmeticId] then
-			upgradeText = " OWNED"
-		elseif item.kind == "flag" and snapshot.ownedFlags and snapshot.ownedFlags[item.flagId] then
-			upgradeText = " OWNED"
-		elseif item.kind == "gear" and snapshot.ownedGear and snapshot.ownedGear[item.gearId] then
-			upgradeText = " OWNED"
-		elseif item.kind == "shipClass" and snapshot.ownedShipClasses and snapshot.ownedShipClasses[item.classId] then
-			upgradeText = if snapshot.activeShipClassId == item.classId then " LAUNCHED" else " OWNED"
+	local sections = {
+		{ title = "SHIP CLASSES", kind = "shipClass" },
+		{ title = "SHIP UPGRADES", kind = "upgrade" },
+		{ title = "PIRATE GEAR", kind = "gear" },
+		{ title = "FLAGS", kind = "flag" },
+		{ title = "SHIP SKINS", kind = "cosmetic" },
+	}
+
+	for _, section in ipairs(sections) do
+		local wroteHeader = false
+		for _, item in ipairs(snapshot.goldItems or {}) do
+			if item.kind == section.kind then
+				if not wroteHeader then
+					makePanelText(state.shopPanel, ("<font color=\"#A9BAC4\"><b>%s</b></font>"):format(section.title), 28)
+					wroteHeader = true
+				end
+				local upgradeText = ""
+				local displayPrice = item.price
+				if item.kind == "upgrade" then
+					local current = snapshot.activeUpgrades and snapshot.activeUpgrades[item.upgradeKey] or 1
+					displayPrice = ShopConfig.upgradePrice(item, current)
+					upgradeText = ("  L%d/%d"):format(current or 1, item.maxLevel or 5)
+				elseif item.kind == "cosmetic" and snapshot.ownedCosmetics and snapshot.ownedCosmetics[item.cosmeticId] then
+					upgradeText = "  OWNED"
+				elseif item.kind == "flag" and snapshot.ownedFlags and snapshot.ownedFlags[item.flagId] then
+					upgradeText = "  OWNED"
+				elseif item.kind == "gear" and snapshot.ownedGear and snapshot.ownedGear[item.gearId] then
+					upgradeText = "  OWNED"
+				elseif item.kind == "shipClass" and snapshot.ownedShipClasses and snapshot.ownedShipClasses[item.classId] then
+					upgradeText = if snapshot.activeShipClassId == item.classId then "  LAUNCHED" else "  OWNED"
+				end
+				makePanelButton(state.shopPanel, ("%s%s    %d gold"):format(item.name, upgradeText, displayPrice), function()
+					remotes.ShopPurchase:FireServer(item.id)
+				end)
+			end
 		end
-		makePanelButton(state.shopPanel, ("%s%s - %d gold"):format(item.name, upgradeText, displayPrice), function()
-			remotes.ShopPurchase:FireServer(item.id)
-		end)
 	end
 
-	makePanelText(state.shopPanel, "ROBUX PRODUCTS", 28)
+	makePanelText(state.shopPanel, "<font color=\"#A9BAC4\"><b>ROBUX PRODUCTS</b></font>", 28)
 	for _, product in ipairs(snapshot.products or {}) do
 		makePanelButton(state.shopPanel, product.name .. " - Robux", function()
 			if product.productId and product.productId > 0 then
@@ -207,7 +324,7 @@ local function renderShop()
 		end)
 	end
 
-	makePanelText(state.shopPanel, "OWNED SKINS", 28)
+	makePanelText(state.shopPanel, "<font color=\"#A9BAC4\"><b>OWNED SKINS</b></font>", 28)
 	for cosmeticId in pairs(snapshot.ownedCosmetics or {}) do
 		local cosmetic = ShopConfig.Cosmetics[cosmeticId]
 		if cosmetic then
@@ -218,7 +335,7 @@ local function renderShop()
 		end
 	end
 
-	makePanelText(state.shopPanel, "OWNED FLAGS", 28)
+	makePanelText(state.shopPanel, "<font color=\"#A9BAC4\"><b>OWNED FLAGS</b></font>", 28)
 	for flagId in pairs(snapshot.ownedFlags or {}) do
 		local flag = ShopConfig.Flags[flagId]
 		if flag then
@@ -256,22 +373,56 @@ local function buildHUD()
 	gui.Name = "PirateHUD"
 	gui.ResetOnSpawn = false
 	gui.IgnoreGuiInset = true
+	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	gui.Parent = player:WaitForChild("PlayerGui")
 
-	state.hud = makeLabel(gui, "HUD", UDim2.fromOffset(18, 34), UDim2.fromOffset(320, 78))
-	state.notice = makeLabel(gui, "Notice", UDim2.new(0.5, -220, 0, 32), UDim2.fromOffset(440, 42))
+	local uiScale = Instance.new("UIScale")
+	uiScale.Scale = if UserInputService.TouchEnabled then 0.94 else 1
+	uiScale.Parent = gui
+
+	state.hud = makeLabel(gui, "HUD", UDim2.fromOffset(18, 34), UDim2.fromOffset(338, 94))
+	state.hud.TextXAlignment = Enum.TextXAlignment.Left
+	state.hud.TextYAlignment = Enum.TextYAlignment.Top
+	local hudPadding = Instance.new("UIPadding")
+	hudPadding.PaddingTop = UDim.new(0, 10)
+	hudPadding.PaddingLeft = UDim.new(0, 14)
+	hudPadding.PaddingRight = UDim.new(0, 14)
+	hudPadding.Parent = state.hud
+
+	local hpTrack = Instance.new("Frame")
+	hpTrack.Name = "HPTrack"
+	hpTrack.Position = UDim2.fromOffset(34, 102)
+	hpTrack.Size = UDim2.fromOffset(306, 10)
+	hpTrack.BackgroundColor3 = Color3.fromRGB(51, 26, 29)
+	hpTrack.BorderSizePixel = 0
+	hpTrack.ZIndex = 7
+	hpTrack.Parent = gui
+	addCorner(hpTrack, 5)
+	addStroke(hpTrack, Color3.fromRGB(255, 255, 255), 1, 0.82)
+
+	state.hpFill = Instance.new("Frame")
+	state.hpFill.Name = "HPFill"
+	state.hpFill.Size = UDim2.fromScale(1, 1)
+	state.hpFill.BackgroundColor3 = UI.green
+	state.hpFill.BorderSizePixel = 0
+	state.hpFill.ZIndex = 8
+	state.hpFill.Parent = hpTrack
+	addCorner(state.hpFill, 5)
+	addGradient(state.hpFill, Color3.fromRGB(115, 242, 161), UI.green, 0)
+
+	state.notice = makeLabel(gui, "Notice", UDim2.new(0.5, -235, 0, 28), UDim2.fromOffset(470, 46))
 	state.notice.Text = ""
 	state.notice.Visible = false
 
-	state.board = makeLabel(gui, "Boarding", UDim2.new(0.5, -170, 0.82, 0), UDim2.fromOffset(340, 48))
+	state.board = makeLabel(gui, "Boarding", UDim2.new(0.5, -190, 0.82, 0), UDim2.fromOffset(380, 52))
 	state.board.Text = ""
 	state.board.Visible = false
 
-	state.eventBanner = makeLabel(gui, "EventBanner", UDim2.new(0.5, -220, 0, 80), UDim2.fromOffset(440, 38))
+	state.eventBanner = makeLabel(gui, "EventBanner", UDim2.new(0.5, -220, 0, 82), UDim2.fromOffset(440, 40))
 	state.eventBanner.Text = ""
 	state.eventBanner.Visible = false
 
-	state.portPanel = makePanel(gui, "PortPanel", UDim2.new(0, 18, 1, -184), UDim2.fromOffset(260, 150))
+	state.portPanel = makePanel(gui, "PortPanel", UDim2.new(0, 18, 1, -198), UDim2.fromOffset(282, 164))
 	state.portPanel.Visible = true
 	makePanelText(state.portPanel, "PORTS\nLoading...", 80)
 
@@ -292,14 +443,14 @@ local function buildHUD()
 	corner.CornerRadius = UDim.new(1, 0)
 	corner.Parent = state.reticle
 
-	local modToggle = makeButton(gui, "ModToggle", "MOD", UDim2.new(1, -82, 0, 72), UDim2.fromOffset(108, 52))
+	local modToggle = makeButton(gui, "ModToggle", "MOD", UDim2.new(1, -84, 0, 72), UDim2.fromOffset(104, 50))
 	modToggle.Visible = false
 	modToggle.Activated:Connect(function()
 		state.modPanel.Visible = not state.modPanel.Visible
 	end)
 
-	state.shopPanel = makePanel(gui, "ShopPanel", UDim2.new(1, -390, 0, 164), UDim2.fromOffset(360, 510))
-	state.modPanel = makePanel(gui, "ModeratorPanel", UDim2.new(0, 18, 0, 128), UDim2.fromOffset(300, 250))
+	state.shopPanel = makePanel(gui, "ShopPanel", UDim2.new(1, -438, 0, 150), UDim2.fromOffset(408, 548))
+	state.modPanel = makePanel(gui, "ModeratorPanel", UDim2.new(0, 18, 0, 140), UDim2.fromOffset(318, 270))
 	state.modToggle = modToggle
 
 	if UserInputService.TouchEnabled then
@@ -387,9 +538,16 @@ end
 showNotice = function(text)
 	state.notice.Text = text
 	state.notice.Visible = true
+	state.notice.TextTransparency = 1
+	state.notice.BackgroundTransparency = 1
+	tween(state.notice, { TextTransparency = 0, BackgroundTransparency = 0.08 }, 0.16)
 	task.delay(3, function()
 		if state.notice.Text == text then
-			state.notice.Visible = false
+			tween(state.notice, { TextTransparency = 1, BackgroundTransparency = 1 }, 0.18)
+			task.wait(0.18)
+			if state.notice.Text == text then
+				state.notice.Visible = false
+			end
 		end
 	end)
 end
@@ -571,7 +729,17 @@ UserInputService.TouchTap:Connect(function(touchPositions, processed)
 end)
 
 remotes.HUDUpdate.OnClientEvent:Connect(function(data)
-	state.hud.Text = ("%s\nGold: %d  HP: %d/%d"):format(data.shipName or "Ship", data.gold or 0, data.hp or 0, data.maxHP or 0)
+	local hp = data.hp or 0
+	local maxHP = math.max(1, data.maxHP or 1)
+	state.hud.Text = ("<font color=\"#FFF6DC\"><b>%s</b></font>\n<font color=\"#F5BB4A\">Gold</font> %d    <font color=\"#A9BAC4\">HP</font> %d/%d"):format(data.shipName or "Ship", data.gold or 0, hp, maxHP)
+	if state.hpFill then
+		local ratio = math.clamp(hp / maxHP, 0, 1)
+		local fillColor = if ratio > 0.55 then UI.green elseif ratio > 0.25 then UI.gold else UI.danger
+		tween(state.hpFill, {
+			Size = UDim2.fromScale(ratio, 1),
+			BackgroundColor3 = fillColor,
+		}, 0.18)
+	end
 end)
 
 remotes.ReticleUpdate.OnClientEvent:Connect(function(target)
@@ -597,7 +765,7 @@ remotes.ModeratorState.OnClientEvent:Connect(function(data)
 end)
 remotes.EventState.OnClientEvent:Connect(function(activeEvent)
 	if activeEvent then
-		state.eventBanner.Text = ("LIVE EVENT: %s"):format(activeEvent.kind)
+		state.eventBanner.Text = ("<font color=\"#F5BB4A\"><b>LIVE EVENT</b></font>  %s"):format(activeEvent.kind)
 		state.eventBanner.Visible = true
 	else
 		state.eventBanner.Visible = false

@@ -13,7 +13,8 @@ Server-authoritative Roblox naval combat prototype with merchant ships, boarding
 - Cannon combat with pooled cannonballs, server-side hit validation, HP, sinking, and merchant gold rewards.
 - Cannon feedback: muzzle flashes and hit bursts replicate to all clients.
 - Target lock, reticle, and HUD for gold/HP.
-- PC and iPad controls, including touch buttons and tap-to-lock targeting.
+- Polished Roblox-style HUD with animated HP bar, rich panels, smoother notices, and grouped trading-post UI.
+- PC and iPad controls, including polished touch buttons and tap-to-lock targeting.
 - Smooth player-controlled follow camera for sailing, with normal character camera during boarding.
 - NPC merchant route loop for the gold economy.
 - Boarding gate: defender must be below 50% HP and within grapple range.
