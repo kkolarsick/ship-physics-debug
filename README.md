@@ -27,6 +27,7 @@ Server-authoritative Roblox naval combat prototype with merchant ships, boarding
 - Purchasable mast flags: country flags, pirate flag, `67`, and `41`.
 - Purchasable pirate gear: cutlass and flintlock pistol, both no-blood.
 - Upgrade loop: buy more cannon pairs, stronger cannons, faster sails, and hired crew with escalating costs.
+- Ship class ladder: ten increasingly expensive ship classes with better HP, speed, cannon damage, size, and cannon slots.
 - Moderator-only live tools for cruise mode, Gold Rush, merchant convoy events, and ending events.
 - PvP port control: hold a harbor capture zone or sink enemy players near a port to flip ownership.
 - Rare Ghost Ship NPC: all-black, unkillable, one-shots ships, and removes 10% of a victim's gold.
@@ -117,6 +118,7 @@ Useful sections:
 - `World.MarineOutposts`: sea outpost locations
 - `World.MerchantRoutes`: merchant patrol routes
 - `Moderation.ModeratorUserIds`: Roblox user ids allowed to run live events
+- `ShopConfig.ShipClasses`: ship class prices, sizes, cannon slots, and class stat bonuses
 
 Shop and microtransaction setup lives in:
 
@@ -133,6 +135,7 @@ Gold shop items are server-validated through `ShopService`. Players open the sto
 - Gear: Cutlass, Flintlock Pistol
 - Flags: Pirate, USA, United Kingdom, France, Spain, 67, 41
 - Ship skins: Crimson Corsair, Royal Navy
+- Ship classes: Skiff, Schooner, War Cutter, Brigantine, Corsair Corvette, Battle Frigate, Treasure Galleon, Man-of-War, Dread Corsair, Pirate Lord Flagship
 - Upgrades: hull HP, cannon damage, cannon pairs per side, sail speed, hired cannon crew
 
 New profiles start with zero gold. Product gold can exist for trial/testing/live monetization, but the default progression assumes gold is earned.
@@ -154,6 +157,12 @@ Robux products are configured as Developer Product hooks:
 - Treasure Chest
 
 The client only prompts purchases or sends item ids. The server owns all grants, receipt processing, gold spending, upgrade levels, and cosmetic ownership.
+
+## Ship Classes
+
+Trading posts sell ten ship classes. Each class is a compact `ShipRecipe` with stronger class bonuses for HP, speed, and cannon damage. Higher tiers also become physically larger and unlock more cannon slots up to six per side.
+
+Buying a class adds that recipe to the player's saved fleet and immediately launches it. Buying an already owned class launches it again for free. Prices climb sharply so players must earn gold through merchants, treasure, PvP, Navy patrols, captures, or boss fights.
 
 ## Moderator Events
 

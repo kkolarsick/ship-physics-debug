@@ -188,6 +188,8 @@ local function renderShop()
 			upgradeText = " OWNED"
 		elseif item.kind == "gear" and snapshot.ownedGear and snapshot.ownedGear[item.gearId] then
 			upgradeText = " OWNED"
+		elseif item.kind == "shipClass" and snapshot.ownedShipClasses and snapshot.ownedShipClasses[item.classId] then
+			upgradeText = if snapshot.activeShipClassId == item.classId then " LAUNCHED" else " OWNED"
 		end
 		makePanelButton(state.shopPanel, ("%s%s - %d gold"):format(item.name, upgradeText, displayPrice), function()
 			remotes.ShopPurchase:FireServer(item.id)

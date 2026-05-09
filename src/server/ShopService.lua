@@ -113,6 +113,27 @@ function ShopService:buyGoldItem(player, itemId)
 			self.gearService:giveOwnedGear(player)
 		end
 		self.remotes.Notify:FireClient(player, item.name .. " purchased.")
+	elseif item.kind == "shipClass" then
+		local shipClass = ShopConfig.findShipClass(item.classId)
+		if not shipClass then
+			return
+		end
+		if self.profileService:hasShipClass(player, item.classId) then
+			if self.profileService:equipShipClass(player, item.classId) then
+				self.shipService:refreshPlayerShip(player)
+				self.remotes.Notify:FireClient(player, item.name .. " launched.")
+				self.shipService:sendHUD(player)
+				self:sendState(player)
+			end
+			return
+		end
+		if not self.profileService:spendGold(player, item.price) then
+			self.remotes.Notify:FireClient(player, "Not enough gold.")
+			return
+		end
+		self.profileService:addShipClass(player, shipClass)
+		self.shipService:refreshPlayerShip(player)
+		self.remotes.Notify:FireClient(player, item.name .. " purchased and launched.")
 	elseif item.kind == "upgrade" then
 		local recipe = self.profileService:getActiveRecipe(player)
 		local currentLevel = recipe.upgrades and recipe.upgrades[item.upgradeKey] or 1

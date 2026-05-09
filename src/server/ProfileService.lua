@@ -25,6 +25,7 @@ local function newProfile()
 		},
 		purchaseHistory = {},
 		ownedGear = {},
+		ownedShipClasses = {},
 		economyVersion = 2,
 		activeShipIndex = 1,
 		ships = {
@@ -56,6 +57,7 @@ function ProfileService:load(player)
 	profile.ownedFlags.default = true
 	profile.purchaseHistory = if typeof(profile.purchaseHistory) == "table" then profile.purchaseHistory else {}
 	profile.ownedGear = if typeof(profile.ownedGear) == "table" then profile.ownedGear else {}
+	profile.ownedShipClasses = if typeof(profile.ownedShipClasses) == "table" then profile.ownedShipClasses else {}
 	profile.equippedCosmetic = profile.equippedCosmetic or "default"
 	profile.equippedFlag = profile.equippedFlag or "default"
 	profile.gold = tonumber(profile.gold) or 0
@@ -82,6 +84,9 @@ function ProfileService:load(player)
 		end
 		if not recipe.flagId then
 			RecipeUtil.applyFlag(recipe, profile.equippedFlag)
+		end
+		if recipe.shipClassId then
+			profile.ownedShipClasses[recipe.shipClassId] = true
 		end
 	end
 
@@ -118,6 +123,8 @@ function ProfileService:getSnapshot(player)
 		ownedCosmetics = profile.ownedCosmetics,
 		ownedFlags = profile.ownedFlags,
 		ownedGear = profile.ownedGear,
+		ownedShipClasses = profile.ownedShipClasses,
+		activeShipClassId = recipe.shipClassId,
 		activeUpgrades = recipe.upgrades,
 		products = ShopConfig.productsList(),
 		goldItems = ShopConfig.goldItemsList(),
@@ -160,10 +167,54 @@ end
 function ProfileService:addShipRecipe(player, recipe)
 	local profile = self:get(player)
 	if not profile then
-		return
+		return nil
 	end
 	table.insert(profile.ships, RecipeUtil.deepCopy(recipe))
 	self.dirty[player] = true
+	return profile.activeShipIndex
+end
+
+function ProfileService:hasShipClass(player, classId)
+	local profile = self:get(player)
+	return profile and profile.ownedShipClasses[classId] == true
+end
+
+function ProfileService:addShipClass(player, shipClass)
+	local profile = self:get(player)
+	if not profile or not shipClass then
+		return false
+	end
+	if profile.ownedShipClasses[shipClass.id] then
+		return self:equipShipClass(player, shipClass.id)
+	end
+	local recipe = RecipeUtil.recipeFromShipClass(shipClass, profile.equippedCosmetic, profile.equippedFlag)
+	table.insert(profile.ships, recipe)
+	profile.ownedShipClasses[shipClass.id] = true
+	profile.activeShipIndex = #profile.ships
+	self.dirty[player] = true
+	return true
+end
+
+function ProfileService:equipShipClass(player, classId)
+	local profile = self:get(player)
+	if not profile or not profile.ownedShipClasses[classId] then
+		return false
+	end
+	for index, recipe in ipairs(profile.ships) do
+		if recipe.shipClassId == classId then
+			profile.activeShipIndex = index
+			self.dirty[player] = true
+			return true
+		end
+	end
+	local shipClass = ShopConfig.findShipClass(classId)
+	if not shipClass then
+		return false
+	end
+	table.insert(profile.ships, RecipeUtil.recipeFromShipClass(shipClass, profile.equippedCosmetic, profile.equippedFlag))
+	profile.activeShipIndex = #profile.ships
+	self.dirty[player] = true
+	return true
 end
 
 function ProfileService:addMerchantSink(player)

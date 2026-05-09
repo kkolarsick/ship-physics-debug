@@ -23,6 +23,29 @@ function RecipeUtil.defaultRecipe()
 	return RecipeUtil.deepCopy(GameConfig.Ships.DefaultRecipe)
 end
 
+function RecipeUtil.recipeFromShipClass(shipClass, cosmeticId, flagId)
+	local recipe = RecipeUtil.defaultRecipe()
+	recipe.id = "ship_class_" .. shipClass.id
+	recipe.shipClassId = shipClass.id
+	recipe.displayName = shipClass.name
+	recipe.classTier = shipClass.tier
+	recipe.classBonus = RecipeUtil.deepCopy(shipClass.bonus or {})
+	recipe.design.length = shipClass.length or recipe.design.length
+	recipe.design.width = shipClass.width or recipe.design.width
+	recipe.design.mastCount = shipClass.mastCount or recipe.design.mastCount
+	recipe.design.cannonPairs = shipClass.cannonSlots or recipe.design.cannonPairs
+	recipe.design.hullColor = RecipeUtil.deepCopy(shipClass.colors and shipClass.colors.hull or recipe.design.hullColor)
+	recipe.design.sailColor = RecipeUtil.deepCopy(shipClass.colors and shipClass.colors.sail or recipe.design.sailColor)
+	recipe.design.trimColor = RecipeUtil.deepCopy(shipClass.colors and shipClass.colors.trim or recipe.design.trimColor)
+	recipe.upgrades.cannonSlots = shipClass.cannonSlots or recipe.upgrades.cannonSlots
+	recipe.cosmeticId = cosmeticId or "default"
+	if recipe.cosmeticId ~= "default" then
+		RecipeUtil.applyCosmetic(recipe, recipe.cosmeticId)
+	end
+	RecipeUtil.applyFlag(recipe, flagId or recipe.flagId or "default")
+	return recipe
+end
+
 function RecipeUtil.applyCosmetic(recipe, cosmeticId)
 	local cosmetic = ShopConfig.Cosmetics[cosmeticId or "default"] or ShopConfig.Cosmetics.default
 	recipe.cosmeticId = cosmetic.id
@@ -68,17 +91,20 @@ end
 
 function RecipeUtil.maxHP(recipe)
 	local upgrades = recipe.upgrades or {}
-	return GameConfig.Balance.Ship.BaseHP + ((upgrades.hull or 1) - 1) * GameConfig.Balance.Ship.HullHPPerLevel
+	local classBonus = recipe.classBonus or {}
+	return GameConfig.Balance.Ship.BaseHP + (classBonus.hp or 0) + ((upgrades.hull or 1) - 1) * GameConfig.Balance.Ship.HullHPPerLevel
 end
 
 function RecipeUtil.maxSpeed(recipe)
 	local upgrades = recipe.upgrades or {}
-	return GameConfig.Balance.Ship.BaseSpeed + ((upgrades.speed or 1) - 1) * GameConfig.Balance.Ship.SpeedPerLevel
+	local classBonus = recipe.classBonus or {}
+	return GameConfig.Balance.Ship.BaseSpeed + (classBonus.speed or 0) + ((upgrades.speed or 1) - 1) * GameConfig.Balance.Ship.SpeedPerLevel
 end
 
 function RecipeUtil.cannonDamage(recipe)
 	local upgrades = recipe.upgrades or {}
-		return GameConfig.Balance.Cannons.Damage + ((upgrades.cannons or 1) - 1) * GameConfig.Balance.Cannons.DamagePerLevel
+	local classBonus = recipe.classBonus or {}
+	return GameConfig.Balance.Cannons.Damage + (classBonus.cannonDamage or 0) + ((upgrades.cannons or 1) - 1) * GameConfig.Balance.Cannons.DamagePerLevel
 end
 
 function RecipeUtil.cannonPairs(recipe)
