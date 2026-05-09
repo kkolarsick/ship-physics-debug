@@ -11,8 +11,8 @@ local store = DataStoreService:GetDataStore(GameConfig.DataStore.ProfileName)
 
 local function newProfile()
 	return {
-		gold = 250,
-		totalGoldEarned = 250,
+		gold = 0,
+		totalGoldEarned = 0,
 		merchantSinks = 0,
 		captures = 0,
 		equippedCosmetic = "default",
@@ -24,6 +24,8 @@ local function newProfile()
 			default = true,
 		},
 		purchaseHistory = {},
+		ownedGear = {},
+		economyVersion = 2,
 		activeShipIndex = 1,
 		ships = {
 			RecipeUtil.defaultRecipe(),
@@ -53,18 +55,27 @@ function ProfileService:load(player)
 	profile.ownedFlags = if typeof(profile.ownedFlags) == "table" then profile.ownedFlags else { default = true }
 	profile.ownedFlags.default = true
 	profile.purchaseHistory = if typeof(profile.purchaseHistory) == "table" then profile.purchaseHistory else {}
+	profile.ownedGear = if typeof(profile.ownedGear) == "table" then profile.ownedGear else {}
 	profile.equippedCosmetic = profile.equippedCosmetic or "default"
 	profile.equippedFlag = profile.equippedFlag or "default"
 	profile.gold = tonumber(profile.gold) or 0
 	profile.totalGoldEarned = tonumber(profile.totalGoldEarned) or profile.gold
 	profile.merchantSinks = tonumber(profile.merchantSinks) or 0
 	profile.captures = tonumber(profile.captures) or 0
+	local migrated = false
+	if profile.economyVersion ~= 2 then
+		profile.gold = 0
+		profile.totalGoldEarned = 0
+		profile.economyVersion = 2
+		migrated = true
+	end
 	profile.activeShipIndex = math.clamp(tonumber(profile.activeShipIndex) or 1, 1, #profile.ships)
 	for _, recipe in ipairs(profile.ships) do
 		recipe.upgrades = recipe.upgrades or {}
 		recipe.upgrades.hull = tonumber(recipe.upgrades.hull) or 1
 		recipe.upgrades.speed = tonumber(recipe.upgrades.speed) or 1
 		recipe.upgrades.cannons = tonumber(recipe.upgrades.cannons) or 1
+		recipe.upgrades.cannonSlots = tonumber(recipe.upgrades.cannonSlots) or 1
 		recipe.upgrades.crew = tonumber(recipe.upgrades.crew) or 1
 		if not recipe.cosmeticId then
 			RecipeUtil.applyCosmetic(recipe, profile.equippedCosmetic)
@@ -75,7 +86,7 @@ function ProfileService:load(player)
 	end
 
 	self.profiles[player] = profile
-	self.dirty[player] = false
+	self.dirty[player] = migrated
 	return profile
 end
 
@@ -106,6 +117,7 @@ function ProfileService:getSnapshot(player)
 		equippedFlag = profile.equippedFlag,
 		ownedCosmetics = profile.ownedCosmetics,
 		ownedFlags = profile.ownedFlags,
+		ownedGear = profile.ownedGear,
 		activeUpgrades = recipe.upgrades,
 		products = ShopConfig.productsList(),
 		goldItems = ShopConfig.goldItemsList(),
@@ -190,6 +202,16 @@ function ProfileService:grantFlag(player, flagId)
 		return false
 	end
 	profile.ownedFlags[flagId] = true
+	self.dirty[player] = true
+	return true
+end
+
+function ProfileService:grantGear(player, gearId)
+	local profile = self:get(player)
+	if not profile then
+		return false
+	end
+	profile.ownedGear[gearId] = true
 	self.dirty[player] = true
 	return true
 end

@@ -12,10 +12,23 @@ function ShopService.new(profileService, shipService, remotes)
 		profileService = profileService,
 		shipService = shipService,
 		remotes = remotes,
+		gearService = nil,
 	}, ShopService)
 end
 
+function ShopService:setGearService(gearService)
+	self.gearService = gearService
+end
+
 function ShopService:start()
+	for _, prompt in ipairs(workspace:GetDescendants()) do
+		if prompt:IsA("ProximityPrompt") and prompt.Name == "TradingPostPrompt" then
+			prompt.Triggered:Connect(function(player)
+				self:sendState(player, true)
+			end)
+		end
+	end
+
 	self.remotes.ShopPurchase.OnServerEvent:Connect(function(player, itemId)
 		self:buyGoldItem(player, itemId)
 	end)
@@ -33,9 +46,10 @@ function ShopService:start()
 	end
 end
 
-function ShopService:sendState(player)
+function ShopService:sendState(player, open)
 	local snapshot = self.profileService:getSnapshot(player)
 	if snapshot then
+		snapshot.open = open == true
 		self.remotes.ShopState:FireClient(player, snapshot)
 	end
 end
@@ -80,14 +94,36 @@ function ShopService:buyGoldItem(player, itemId)
 		self.profileService:equipFlag(player, item.flagId)
 		self.shipService:refreshPlayerShip(player)
 		self.remotes.Notify:FireClient(player, item.name .. " raised.")
-	elseif item.kind == "upgrade" then
+	elseif item.kind == "gear" then
+		local profile = self.profileService:get(player)
+		if profile and profile.ownedGear[item.gearId] then
+			if self.gearService then
+				self.gearService:giveOwnedGear(player)
+			end
+			self.remotes.Notify:FireClient(player, "Already owned. Gear equipped.")
+			self:sendState(player)
+			return
+		end
 		if not self.profileService:spendGold(player, item.price) then
+			self.remotes.Notify:FireClient(player, "Not enough gold.")
+			return
+		end
+		self.profileService:grantGear(player, item.gearId)
+		if self.gearService then
+			self.gearService:giveOwnedGear(player)
+		end
+		self.remotes.Notify:FireClient(player, item.name .. " purchased.")
+	elseif item.kind == "upgrade" then
+		local recipe = self.profileService:getActiveRecipe(player)
+		local currentLevel = recipe.upgrades and recipe.upgrades[item.upgradeKey] or 1
+		local price = ShopConfig.upgradePrice(item, currentLevel)
+		if not self.profileService:spendGold(player, price) then
 			self.remotes.Notify:FireClient(player, "Not enough gold.")
 			return
 		end
 		local upgraded = self.profileService:upgradeActiveShip(player, item.upgradeKey, 1, item.maxLevel)
 		if not upgraded then
-			self.profileService:addGold(player, item.price, false)
+			self.profileService:addGold(player, price, false)
 			self.remotes.Notify:FireClient(player, "Upgrade already maxed.")
 			self.shipService:sendHUD(player)
 			self:sendState(player)

@@ -134,6 +134,10 @@ function WorldService:setup()
 
 	for _, port in ipairs(GameConfig.World.Ports) do
 		local model = Workspace:FindFirstChild(port.name)
+		if model then
+			model:Destroy()
+			model = nil
+		end
 		if not model then
 			model = Instance.new("Model")
 			model.Name = port.name
@@ -191,6 +195,19 @@ function WorldService:setup()
 
 			addHut(model, port.position + Vector3.new(22, 4, -24), if port.theme == "pirate" then Color3.fromRGB(91, 45, 39) else Color3.fromRGB(139, 97, 55))
 			addHut(model, port.position + Vector3.new(-18, 4, 28), if port.theme == "market" then Color3.fromRGB(180, 95, 64) else Color3.fromRGB(116, 78, 47))
+
+			local tradingPost = makeAnchoredPart(model, "TradingPost", Vector3.new(20, 12, 16), CFrame.new(port.position + Vector3.new(28, 10, 24)), Color3.fromRGB(97, 58, 31), Enum.Material.WoodPlanks)
+			local sign = makeAnchoredPart(model, "TradingPostSign", Vector3.new(18, 5, 1), CFrame.new(port.position + Vector3.new(28, 18, 15.5)), Color3.fromRGB(255, 210, 102), Enum.Material.Wood)
+			sign.CanCollide = false
+
+			local prompt = Instance.new("ProximityPrompt")
+			prompt.Name = "TradingPostPrompt"
+			prompt.ActionText = "Trade"
+			prompt.ObjectText = port.name .. " Trading Post"
+			prompt.HoldDuration = 0.4
+			prompt.MaxActivationDistance = 18
+			prompt.RequiresLineOfSight = false
+			prompt.Parent = tradingPost
 
 			if port.theme == "temple" then
 				makeAnchoredPart(model, "Sunspire", Vector3.new(18, 44, 18), CFrame.new(port.position + Vector3.new(14, 26, 12)), Color3.fromRGB(220, 191, 112), Enum.Material.Slate)

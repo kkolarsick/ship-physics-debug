@@ -22,7 +22,11 @@ Server-authoritative Roblox naval combat prototype with merchant ships, boarding
 - DataStore persists `PlayerProfile` plus `ShipRecipe` only, not live part graphs.
 - Addictive progression loop: merchant-sink milestones, capture rewards, gold spend goals, and persistent upgrades.
 - Shop UI for gold cosmetics/upgrades plus Robux developer-product hooks.
+- Store access is now a physical trading post on each island, not a global button.
+- New players start with `0` gold; gold must be earned through trials, treasure, merchants, PvP, or configured products.
 - Purchasable mast flags: country flags, pirate flag, `67`, and `41`.
+- Purchasable pirate gear: cutlass and flintlock pistol, both no-blood.
+- Upgrade loop: buy more cannon pairs, stronger cannons, faster sails, and hired crew with escalating costs.
 - Moderator-only live tools for cruise mode, Gold Rush, merchant convoy events, and ending events.
 - PvP port control: hold a harbor capture zone or sink enemy players near a port to flip ownership.
 - Rare Ghost Ship NPC: all-black, unkillable, one-shots ships, and removes 10% of a victim's gold.
@@ -81,7 +85,7 @@ The project uses `default.project.json` to map:
 
 Boarding only starts when the defender ship is below 50% HP and close enough to grapple.
 
-Captain mode disables default avatar movement and drives the ship instead. Shore leave re-enables avatar controls so players can walk on islands and use treasure-search prompts.
+Captain mode disables default avatar movement and drives the ship instead. Shore leave re-enables avatar controls so players can walk on islands, use treasure-search prompts, duel other pirates, and visit trading posts.
 
 ## Tuning
 
@@ -116,19 +120,30 @@ Set each Robux product's `productId` after creating Developer Products in the Ro
 
 ## Shop / Monetization
 
-Gold shop items are server-validated through `ShopService`:
+Gold shop items are server-validated through `ShopService`. Players open the store at physical `TradingPost` prompts on islands.
 
+- Gear: Cutlass, Flintlock Pistol
 - Flags: Pirate, USA, United Kingdom, France, Spain, 67, 41
 - Ship skins: Crimson Corsair, Royal Navy
-- Upgrades: hull HP, cannon damage, sail speed, boarding crew
+- Upgrades: hull HP, cannon damage, cannon pairs per side, sail speed, hired cannon crew
+
+New profiles start with zero gold. Product gold can exist for trial/testing/live monetization, but the default progression assumes gold is earned.
+
+## Island PvP And Villagers
+
+When players toggle shore leave, they can use bought gear on islands:
+
+- Cutlass: close-range duel weapon
+- Flintlock Pistol: short-cooldown ranged sidearm
+- Player-vs-player gear damage only works when both players are on shore leave
+- No blood effects are used
+
+Villagers are neutral NPCs on islands. Attacking them causes return fire and player damage.
 
 Robux products are configured as Developer Product hooks:
 
 - Coin Pouch
 - Treasure Chest
-- Storm Sails bundle
-- Cannon Upgrade Kit
-- Sail Upgrade Kit
 
 The client only prompts purchases or sends item ids. The server owns all grants, receipt processing, gold spending, upgrade levels, and cosmetic ownership.
 

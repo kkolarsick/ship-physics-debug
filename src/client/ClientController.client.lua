@@ -167,18 +167,25 @@ local function renderShop()
 	clearChildren(state.shopPanel)
 	local snapshot = state.shopSnapshot
 	makePanelText(state.shopPanel, ("SHOP  Gold: %d"):format(snapshot.gold or 0), 34)
+	makePanelButton(state.shopPanel, "Close Trading Post", function()
+		state.shopPanel.Visible = false
+	end)
 
 	for _, item in ipairs(snapshot.goldItems or {}) do
 		local upgradeText = ""
+		local displayPrice = item.price
 		if item.kind == "upgrade" then
 			local current = snapshot.activeUpgrades and snapshot.activeUpgrades[item.upgradeKey] or 1
+			displayPrice = ShopConfig.upgradePrice(item, current)
 			upgradeText = (" L%d/%d"):format(current or 1, item.maxLevel or 5)
 		elseif item.kind == "cosmetic" and snapshot.ownedCosmetics and snapshot.ownedCosmetics[item.cosmeticId] then
 			upgradeText = " OWNED"
 		elseif item.kind == "flag" and snapshot.ownedFlags and snapshot.ownedFlags[item.flagId] then
 			upgradeText = " OWNED"
+		elseif item.kind == "gear" and snapshot.ownedGear and snapshot.ownedGear[item.gearId] then
+			upgradeText = " OWNED"
 		end
-		makePanelButton(state.shopPanel, ("%s%s - %d gold"):format(item.name, upgradeText, item.price), function()
+		makePanelButton(state.shopPanel, ("%s%s - %d gold"):format(item.name, upgradeText, displayPrice), function()
 			remotes.ShopPurchase:FireServer(item.id)
 		end)
 	end
@@ -279,13 +286,7 @@ local function buildHUD()
 	corner.CornerRadius = UDim.new(1, 0)
 	corner.Parent = state.reticle
 
-	local shopToggle = makeButton(gui, "ShopToggle", "SHOP", UDim2.new(1, -82, 0, 72), UDim2.fromOffset(108, 52))
-	shopToggle.Activated:Connect(function()
-		state.shopPanel.Visible = not state.shopPanel.Visible
-		renderShop()
-	end)
-
-	local modToggle = makeButton(gui, "ModToggle", "MOD", UDim2.new(1, -82, 0, 132), UDim2.fromOffset(108, 52))
+	local modToggle = makeButton(gui, "ModToggle", "MOD", UDim2.new(1, -82, 0, 72), UDim2.fromOffset(108, 52))
 	modToggle.Visible = false
 	modToggle.Activated:Connect(function()
 		state.modPanel.Visible = not state.modPanel.Visible
@@ -371,6 +372,7 @@ local function buildHUD()
 		end)
 		walk.Activated:Connect(function()
 			state.onFoot = not state.onFoot
+			remotes.ShoreMode:FireServer(state.onFoot)
 			showNotice(if state.onFoot then "Shore leave: avatar controls on." else "Captain mode: ship controls on.")
 		end)
 	end
@@ -523,6 +525,7 @@ UserInputService.InputBegan:Connect(function(input, processed)
 		remotes.BoardRequest:FireServer(target)
 	elseif input.KeyCode == Enum.KeyCode.X then
 		state.onFoot = not state.onFoot
+		remotes.ShoreMode:FireServer(state.onFoot)
 		showNotice(if state.onFoot then "Shore leave: avatar controls on." else "Captain mode: ship controls on.")
 	end
 end)
@@ -551,6 +554,9 @@ remotes.CannonFX.OnClientEvent:Connect(cannonFlash)
 remotes.HitFX.OnClientEvent:Connect(hitBurst)
 remotes.ShopState.OnClientEvent:Connect(function(snapshot)
 	state.shopSnapshot = snapshot
+	if snapshot.open then
+		state.shopPanel.Visible = true
+	end
 	renderShop()
 end)
 remotes.ModeratorState.OnClientEvent:Connect(function(data)

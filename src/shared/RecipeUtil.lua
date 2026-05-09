@@ -78,7 +78,18 @@ end
 
 function RecipeUtil.cannonDamage(recipe)
 	local upgrades = recipe.upgrades or {}
-	return GameConfig.Balance.Cannons.Damage + ((upgrades.cannons or 1) - 1) * GameConfig.Balance.Cannons.DamagePerLevel
+		return GameConfig.Balance.Cannons.Damage + ((upgrades.cannons or 1) - 1) * GameConfig.Balance.Cannons.DamagePerLevel
+end
+
+function RecipeUtil.cannonPairs(recipe)
+	local upgrades = recipe.upgrades or {}
+	return math.clamp(tonumber(upgrades.cannonSlots) or 1, 1, GameConfig.Balance.Cannons.MaxPairsPerSide)
+end
+
+function RecipeUtil.cannonCooldown(recipe)
+	local upgrades = recipe.upgrades or {}
+	local crewLevel = tonumber(upgrades.crew) or 1
+	return math.max(0.75, GameConfig.Balance.Cannons.Cooldown - (crewLevel - 1) * 0.12)
 end
 
 function RecipeUtil.crewCount(recipe)

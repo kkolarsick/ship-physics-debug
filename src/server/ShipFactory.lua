@@ -177,8 +177,9 @@ function ShipFactory:createShip(options)
 	cannonFolder.Name = "Cannons"
 	cannonFolder.Parent = model
 
-	local offsets = GameConfig.Balance.Cannons.SpawnForwardOffsets
-	for _, z in ipairs(offsets) do
+	local cannonPairs = RecipeUtil.cannonPairs(recipe)
+	for index = 1, cannonPairs do
+		local z = -length / 2 + 6 + (index - 1) * ((length - 12) / math.max(1, cannonPairs - 1))
 		for _, side in ipairs({ -1, 1 }) do
 			local cannon = makePart("Cannon", Vector3.new(2, 2, 5), root.CFrame * CFrame.new(side * (width / 2 + 1.2), 3.2, z), Color3.fromRGB(32, 32, 36), cannonFolder)
 			cannon.Material = Enum.Material.Metal

@@ -15,6 +15,7 @@ Net.RemoteNames = {
 	ShopPurchase = "ShopPurchase",
 	EquipCosmetic = "EquipCosmetic",
 	EquipFlag = "EquipFlag",
+	ShoreMode = "ShoreMode",
 	ShopState = "ShopState",
 	ModeratorCommand = "ModeratorCommand",
 	ModeratorState = "ModeratorState",

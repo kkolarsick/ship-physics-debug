@@ -52,7 +52,7 @@ function CannonService:fire(player, side)
 	end
 
 	local now = os.clock()
-	if now - ship.lastFire < GameConfig.Balance.Cannons.Cooldown then
+	if now - ship.lastFire < RecipeUtil.cannonCooldown(ship.recipe) then
 		return
 	end
 	ship.lastFire = now
@@ -62,7 +62,10 @@ function CannonService:fire(player, side)
 	local right = root.CFrame.RightVector * side
 	local damage = RecipeUtil.cannonDamage(ship.recipe)
 
-	for _, z in ipairs(GameConfig.Balance.Cannons.SpawnForwardOffsets) do
+	local cannonPairs = RecipeUtil.cannonPairs(ship.recipe)
+	for index = 1, cannonPairs do
+		local length = ship.recipe.design and ship.recipe.design.length or 32
+		local z = -length / 2 + 6 + (index - 1) * ((length - 12) / math.max(1, cannonPairs - 1))
 		local origin = root.Position + root.CFrame.LookVector * z + root.CFrame.RightVector * side * GameConfig.Balance.Cannons.SpawnSideOffset + Vector3.new(0, 3, 0)
 		self.remotes.CannonFX:FireAllClients(origin, right.Unit)
 		self:spawnProjectile(ship, origin, right.Unit, damage)
