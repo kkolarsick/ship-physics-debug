@@ -230,6 +230,7 @@ function ShipFactory:createShip(options)
 		isMerchant = options.teamKind == "Merchant",
 		isPrize = options.teamKind == "Prize",
 		isGhost = options.teamKind == "Ghost",
+		isNavy = options.teamKind == "Navy",
 	}
 end
 

@@ -97,6 +97,19 @@ function ShipService:spawnMerchant(name, recipe, cframe)
 	return ship
 end
 
+function ShipService:spawnNavyShip(recipe, cframe)
+	local ship = self.shipFactory:createShip({
+		name = "RoyalNavy",
+		recipe = recipe,
+		cframe = cframe,
+		parent = self.worldService:getFolder("RoyalNavy"),
+		teamKind = "Navy",
+		maxHP = GameConfig.Balance.RoyalNavy.HP,
+	})
+	self:register(ship)
+	return ship
+end
+
 function ShipService:spawnGhostShip(recipe, cframe)
 	local ship = self.shipFactory:createShip({
 		name = "GhostShip",
@@ -236,6 +249,12 @@ function ShipService:start()
 				local throttle = if stale then 0 else ship.input.throttle
 				local turn = if stale then 0 else ship.input.turn
 				local speed = ship.isMerchant and GameConfig.Balance.Merchants.Speed or RecipeUtil.maxSpeed(ship.recipe)
+				if ship.isNavy then
+					speed = GameConfig.Balance.RoyalNavy.Speed
+				end
+				if ship.isKraken then
+					speed = GameConfig.Balance.Kraken.Speed
+				end
 				if ship.isGhost then
 					speed = GameConfig.Balance.GhostShip.Speed
 				end

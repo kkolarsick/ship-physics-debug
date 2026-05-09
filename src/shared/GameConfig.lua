@@ -26,6 +26,12 @@ GameConfig.World = {
 		{ name = "Frosthook Harbor", position = Vector3.new(820, 4, 210), spawnPosition = Vector3.new(700, 6, 305), theme = "navy" },
 		{ name = "Ruby Lagoon", position = Vector3.new(-230, 4, 790), spawnPosition = Vector3.new(-100, 6, 700), theme = "market" },
 	},
+	MarineOutposts = {
+		{ name = "North Watch", position = Vector3.new(340, 3, -120) },
+		{ name = "Cannon Shoal", position = Vector3.new(-360, 3, -520) },
+		{ name = "Lantern Post", position = Vector3.new(710, 3, 560) },
+		{ name = "Old Buoy Fort", position = Vector3.new(-780, 3, 360) },
+	},
 	MerchantRoutes = {
 		{
 			Vector3.new(-460, 6, -260),
@@ -129,6 +135,30 @@ GameConfig.Balance = {
 		Speed = 82,
 		AttackRange = 80,
 		GoldLossPercent = 0.1,
+	},
+	RoyalNavy = {
+		SpawnInterval = 85,
+		SpawnChance = 0.55,
+		HP = 260,
+		Speed = 46,
+		AttackRange = 95,
+		Damage = 36,
+		AttackCooldown = 2.5,
+		GoldMin = 220,
+		GoldMax = 620,
+		CrewRewardChance = 0.35,
+	},
+	Kraken = {
+		SpawnInterval = 180,
+		SpawnChance = 0.2,
+		HP = 650,
+		Speed = 36,
+		AttackRange = 90,
+		Damage = 85,
+		AttackCooldown = 3,
+		ActiveSeconds = 130,
+		GoldRewardMin = 900,
+		GoldRewardMax = 1800,
 	},
 	IslandActivities = {
 		TreasureCooldown = 120,

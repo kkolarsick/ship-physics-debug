@@ -14,7 +14,7 @@ Server-authoritative Roblox naval combat prototype with merchant ships, boarding
 - Cannon feedback: muzzle flashes and hit bursts replicate to all clients.
 - Target lock, reticle, and HUD for gold/HP.
 - PC and iPad controls, including touch buttons and tap-to-lock targeting.
-- Smooth follow camera for sailing, with normal character camera during boarding.
+- Smooth player-controlled follow camera for sailing, with normal character camera during boarding.
 - NPC merchant route loop for the gold economy.
 - Boarding gate: defender must be below 50% HP and within grapple range.
 - Instanced boarding arena with defender crew NPCs.
@@ -31,8 +31,11 @@ Server-authoritative Roblox naval combat prototype with merchant ships, boarding
 - PvP port control: hold a harbor capture zone or sink enemy players near a port to flip ownership.
 - Rare Ghost Ship NPC: all-black, unkillable, one-shots ships, and removes 10% of a victim's gold.
 - Eight distinct ports with larger islands, docks, towers, huts, palms, themed landmarks, and treasure-search spots.
+- Marine outposts at sea with watch towers, docks, beacon lights, and cannon silhouettes.
+- Royal Navy patrol encounters that hunt players; defeating one grants random gold and may add a crew member.
+- Rare Kraken encounter that attacks player ships; defeating it pays a large gold reward, but losing to it wipes current gold.
 
-Ports and territory control are intentionally out of scope for this MVP.
+Ports, island activities, sea outposts, and world threats are included as MVP gameplay layers around the core naval loop.
 
 ## Studio Setup
 
@@ -64,6 +67,7 @@ The project uses `default.project.json` to map:
 - `W`: sail forward
 - `S`: reverse slowly
 - `A` / `D`: turn
+- Hold right mouse and drag: orbit the ship camera
 - `Q`: fire left cannons
 - `E`: fire right cannons
 - `T`: lock target under mouse
@@ -76,6 +80,7 @@ The project uses `default.project.json` to map:
 - `SAIL`: sail forward
 - `BACK`: reverse slowly
 - `<` / `>`: turn
+- Swipe while sailing: orbit the ship camera
 - `L` / `R`: fire left or right cannons
 - Tap an enemy ship: lock target
 - `LOCK`: lock target under touch/cursor
@@ -104,9 +109,12 @@ Useful sections:
 - `Balance.Merchants`: NPC count, speed, HP, reward, respawn timing
 - `Balance.PortControl`: capture radius/time and PvP port rewards
 - `Balance.GhostShip`: rare spawn rate, lifetime, speed, attack range, gold-loss percent
+- `Balance.RoyalNavy`: patrol spawn rate, HP, speed, attack damage, gold rewards, crew reward chance
+- `Balance.Kraken`: spawn rate, HP, speed, attack damage, lifetime, victory reward
 - `Balance.IslandActivities`: treasure-search cooldown and reward range
 - `Balance.Boarding`: grapple range, channel time, crew count, crew HP/damage, arena timeout
 - `World.Ports`: prize ship spawn locations
+- `World.MarineOutposts`: sea outpost locations
 - `World.MerchantRoutes`: merchant patrol routes
 - `Moderation.ModeratorUserIds`: Roblox user ids allowed to run live events
 
@@ -189,6 +197,12 @@ The Ghost Ship is a rare world threat:
 - If it sinks a player, that player loses 10% of current gold.
 
 Tune how punishing and frequent it is in `Balance.GhostShip`.
+
+## Royal Navy And Kraken
+
+Royal Navy patrols appear randomly at sea and focus the nearest player ship. They can be defeated with normal cannon fire. The winning attacker earns a random gold reward and has a chance to gain one crew level.
+
+The Kraken is a rare boss threat. It chases the nearest player ship, damages ships directly, and can be killed by cannon fire. Defeating it grants a large random gold reward. If the Kraken sinks a player, that player loses all current gold.
 
 ## Persistence Model
 

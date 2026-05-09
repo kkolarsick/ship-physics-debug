@@ -33,6 +33,10 @@ local state = {
 	inBoarding = false,
 	avatarControlsEnabled = true,
 	onFoot = false,
+	cameraYaw = 0,
+	cameraPitch = 0,
+	cameraDragging = false,
+	lastPointer = nil,
 }
 
 local findTargetFromMouse
@@ -512,7 +516,10 @@ UserInputService.InputBegan:Connect(function(input, processed)
 		return
 	end
 
-	if input.KeyCode == Enum.KeyCode.Q then
+	if input.UserInputType == Enum.UserInputType.MouseButton2 then
+		state.cameraDragging = true
+		state.lastPointer = input.Position
+	elseif input.KeyCode == Enum.KeyCode.Q then
 		remotes.FireCannons:FireServer("left")
 	elseif input.KeyCode == Enum.KeyCode.E then
 		remotes.FireCannons:FireServer("right")
@@ -527,6 +534,26 @@ UserInputService.InputBegan:Connect(function(input, processed)
 		state.onFoot = not state.onFoot
 		remotes.ShoreMode:FireServer(state.onFoot)
 		showNotice(if state.onFoot then "Shore leave: avatar controls on." else "Captain mode: ship controls on.")
+	end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseMovement and state.cameraDragging and state.lastPointer then
+		local delta = input.Position - state.lastPointer
+		state.cameraYaw -= delta.X * 0.006
+		state.cameraPitch = math.clamp(state.cameraPitch - delta.Y * 0.004, -0.45, 0.55)
+		state.lastPointer = input.Position
+	elseif input.UserInputType == Enum.UserInputType.Touch and not state.onFoot and not state.inBoarding then
+		local delta = input.Delta
+		state.cameraYaw -= delta.X * 0.004
+		state.cameraPitch = math.clamp(state.cameraPitch - delta.Y * 0.003, -0.45, 0.55)
+	end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton2 then
+		state.cameraDragging = false
+		state.lastPointer = nil
 	end
 end)
 
@@ -637,9 +664,10 @@ RunService.RenderStepped:Connect(function(dt)
 	if shipRoot and camera then
 		setAvatarControlsEnabled(false)
 		camera.CameraType = Enum.CameraType.Scriptable
-		local look = shipRoot.CFrame.LookVector
-		local desiredPosition = shipRoot.Position - look * GameConfig.Balance.Camera.FollowDistance + Vector3.new(0, GameConfig.Balance.Camera.FollowHeight, 0)
-		local lookAt = shipRoot.Position + look * GameConfig.Balance.Camera.LookAhead
+		local orbit = CFrame.Angles(0, state.cameraYaw, 0)
+		local look = (orbit * shipRoot.CFrame).LookVector
+		local desiredPosition = shipRoot.Position - look * GameConfig.Balance.Camera.FollowDistance + Vector3.new(0, GameConfig.Balance.Camera.FollowHeight + state.cameraPitch * 40, 0)
+		local lookAt = shipRoot.Position + shipRoot.CFrame.LookVector * GameConfig.Balance.Camera.LookAhead
 		local desired = CFrame.new(desiredPosition, lookAt)
 		camera.CFrame = camera.CFrame:Lerp(desired, math.clamp(dt / GameConfig.Balance.Camera.Smoothing, 0, 1))
 	elseif (state.inBoarding or state.onFoot) and camera then

@@ -223,6 +223,30 @@ function WorldService:setup()
 			activity:SetAttribute("PortName", port.name)
 		end
 	end
+
+	for _, outpost in ipairs(GameConfig.World.MarineOutposts) do
+		local model = Workspace:FindFirstChild(outpost.name)
+		if model then
+			model:Destroy()
+		end
+		model = Instance.new("Model")
+		model.Name = outpost.name
+		model.Parent = Workspace
+
+		makeAnchoredPart(model, "StoneBase", Vector3.new(62, 10, 62), CFrame.new(outpost.position), Color3.fromRGB(98, 101, 103), Enum.Material.Slate)
+		makeAnchoredPart(model, "WatchTower", Vector3.new(16, 42, 16), CFrame.new(outpost.position + Vector3.new(0, 26, 0)), Color3.fromRGB(166, 159, 140), Enum.Material.Slate)
+		makeAnchoredPart(model, "DockNorth", Vector3.new(16, 4, 72), CFrame.new(outpost.position + Vector3.new(0, 2, 48)), Color3.fromRGB(104, 72, 45), Enum.Material.WoodPlanks)
+		for _, x in ipairs({ -22, 22 }) do
+			local cannon = makeAnchoredPart(model, "OutpostCannon", Vector3.new(4, 4, 11), CFrame.new(outpost.position + Vector3.new(x, 9, 0)), Color3.fromRGB(28, 28, 32), Enum.Material.Metal)
+			cannon.CanCollide = false
+		end
+		local light = Instance.new("PointLight")
+		light.Name = "Beacon"
+		light.Color = Color3.fromRGB(255, 215, 128)
+		light.Range = 120
+		light.Brightness = 2
+		light.Parent = model.WatchTower
+	end
 end
 
 function WorldService:nearestPort(position)
