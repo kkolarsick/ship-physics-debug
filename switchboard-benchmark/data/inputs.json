@@ -1,0 +1,17 @@
+{
+  "validation_threshold": 0.9,
+  "min_cost_savings_pct": 30.0,
+  "max_correctness_degradation_pp": 1.0,
+  "min_reliability_lift_pp": 10.0,
+  "quality_floor_correct_pct": 93.0,
+  "jobs_per_month": 1000000,
+  "selected_baseline": "single:firecrawl",
+  "selected_candidate": "cheapest_first",
+  "respect_robots": true,
+  "min_domain_delay_s": 2.0,
+  "max_domain_delay_s": 5.0,
+  "max_concurrency": 1,
+  "max_transient_retries": 2,
+  "local_compute_usd_per_hour": 0.06,
+  "user_agent": "SwitchboardBenchmark/0.2 (+economics benchmark; contact: you@example.com)"
+}

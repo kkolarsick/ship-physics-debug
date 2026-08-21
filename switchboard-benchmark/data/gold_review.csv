@@ -1,0 +1,101 @@
+task_id,split,bucket,url,instruction,proposed_gold_json,reviewer_notes,approve_y_n
+STA-001,Train,Static HTML,,,,,N
+STA-002,Train,Static HTML,,,,,N
+STA-003,Train,Static HTML,,,,,N
+STA-004,Train,Static HTML,,,,,N
+STA-005,Train,Static HTML,,,,,N
+STA-006,Train,Static HTML,,,,,N
+STA-007,Train,Static HTML,,,,,N
+STA-008,Train,Static HTML,,,,,N
+STA-009,Train,Static HTML,,,,,N
+STA-010,Train,Static HTML,,,,,N
+STA-011,Train,Static HTML,,,,,N
+STA-012,Train,Static HTML,,,,,N
+STA-013,Train,Static HTML,,,,,N
+STA-014,Train,Static HTML,,,,,N
+STA-015,Train,Static HTML,,,,,N
+STA-016,Holdout,Static HTML,,,,,N
+STA-017,Holdout,Static HTML,,,,,N
+STA-018,Holdout,Static HTML,,,,,N
+STA-019,Holdout,Static HTML,,,,,N
+STA-020,Holdout,Static HTML,,,,,N
+JSH-001,Train,JS-heavy,,,,,N
+JSH-002,Train,JS-heavy,,,,,N
+JSH-003,Train,JS-heavy,,,,,N
+JSH-004,Train,JS-heavy,,,,,N
+JSH-005,Train,JS-heavy,,,,,N
+JSH-006,Train,JS-heavy,,,,,N
+JSH-007,Train,JS-heavy,,,,,N
+JSH-008,Train,JS-heavy,,,,,N
+JSH-009,Train,JS-heavy,,,,,N
+JSH-010,Train,JS-heavy,,,,,N
+JSH-011,Train,JS-heavy,,,,,N
+JSH-012,Holdout,JS-heavy,,,,,N
+JSH-013,Holdout,JS-heavy,,,,,N
+JSH-014,Holdout,JS-heavy,,,,,N
+JSH-015,Holdout,JS-heavy,,,,,N
+TAB-001,Train,Dynamic table,,,,,N
+TAB-002,Train,Dynamic table,,,,,N
+TAB-003,Train,Dynamic table,,,,,N
+TAB-004,Train,Dynamic table,,,,,N
+TAB-005,Train,Dynamic table,,,,,N
+TAB-006,Train,Dynamic table,,,,,N
+TAB-007,Train,Dynamic table,,,,,N
+TAB-008,Train,Dynamic table,,,,,N
+TAB-009,Holdout,Dynamic table,,,,,N
+TAB-010,Holdout,Dynamic table,,,,,N
+SCR-001,Train,Infinite scroll / pagination,,,,,N
+SCR-002,Train,Infinite scroll / pagination,,,,,N
+SCR-003,Train,Infinite scroll / pagination,,,,,N
+SCR-004,Train,Infinite scroll / pagination,,,,,N
+SCR-005,Train,Infinite scroll / pagination,,,,,N
+SCR-006,Train,Infinite scroll / pagination,,,,,N
+SCR-007,Train,Infinite scroll / pagination,,,,,N
+SCR-008,Train,Infinite scroll / pagination,,,,,N
+SCR-009,Holdout,Infinite scroll / pagination,,,,,N
+SCR-010,Holdout,Infinite scroll / pagination,,,,,N
+INT-001,Train,Interaction-heavy,,,,,N
+INT-002,Train,Interaction-heavy,,,,,N
+INT-003,Train,Interaction-heavy,,,,,N
+INT-004,Train,Interaction-heavy,,,,,N
+INT-005,Train,Interaction-heavy,,,,,N
+INT-006,Train,Interaction-heavy,,,,,N
+INT-007,Train,Interaction-heavy,,,,,N
+INT-008,Holdout,Interaction-heavy,,,,,N
+INT-009,Holdout,Interaction-heavy,,,,,N
+INT-010,Holdout,Interaction-heavy,,,,,N
+STR-001,Train,Structured extraction,,,,,N
+STR-002,Train,Structured extraction,,,,,N
+STR-003,Train,Structured extraction,,,,,N
+STR-004,Train,Structured extraction,,,,,N
+STR-005,Train,Structured extraction,,,,,N
+STR-006,Train,Structured extraction,,,,,N
+STR-007,Train,Structured extraction,,,,,N
+STR-008,Train,Structured extraction,,,,,N
+STR-009,Train,Structured extraction,,,,,N
+STR-010,Train,Structured extraction,,,,,N
+STR-011,Train,Structured extraction,,,,,N
+STR-012,Holdout,Structured extraction,,,,,N
+STR-013,Holdout,Structured extraction,,,,,N
+STR-014,Holdout,Structured extraction,,,,,N
+STR-015,Holdout,Structured extraction,,,,,N
+PDF-001,Train,PDF / document,,,,,N
+PDF-002,Train,PDF / document,,,,,N
+PDF-003,Train,PDF / document,,,,,N
+PDF-004,Train,PDF / document,,,,,N
+PDF-005,Train,PDF / document,,,,,N
+PDF-006,Train,PDF / document,,,,,N
+PDF-007,Train,PDF / document,,,,,N
+PDF-008,Train,PDF / document,,,,,N
+PDF-009,Holdout,PDF / document,,,,,N
+PDF-010,Holdout,PDF / document,,,,,N
+AMB-001,Train,Ambiguous / mixed,,,,,N
+AMB-002,Train,Ambiguous / mixed,,,,,N
+AMB-003,Train,Ambiguous / mixed,,,,,N
+AMB-004,Train,Ambiguous / mixed,,,,,N
+AMB-005,Train,Ambiguous / mixed,,,,,N
+AMB-006,Train,Ambiguous / mixed,,,,,N
+AMB-007,Train,Ambiguous / mixed,,,,,N
+AMB-008,Holdout,Ambiguous / mixed,,,,,N
+AMB-009,Holdout,Ambiguous / mixed,,,,,N
+AMB-010,Holdout,Ambiguous / mixed,,,,,N
