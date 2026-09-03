@@ -228,7 +228,7 @@ export default async function DashboardPage() {
         </div>
       </section>
 
-      <section className="grid gap-5 lg:grid-cols-2">
+      <section className="grid items-start gap-5 lg:grid-cols-2">
         <div className="panel">
           <div className="panel-head">
             <h2 className="text-sm font-semibold">{COVERAGE_LANGUAGE.covered}</h2>

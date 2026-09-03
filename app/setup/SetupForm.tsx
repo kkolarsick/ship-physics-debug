@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useActionState } from 'react';
 import { savePolicyAction, type ActionResult } from '@/app/actions';
 import { formatMod, formatPct, formatRate, formatScaled } from '@/lib/money';
@@ -26,13 +27,22 @@ export function SetupForm({
   );
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+    <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
       <form action={action} className="panel">
         <div className="panel-head">
           <h1 className="text-sm font-semibold">Policy term</h1>
-          <p className="text-2xs text-ink-faint">
-            {policy ? `Editing ${formatUsDate(policy.termStart)} – ${formatUsDate(policy.termEnd)}` : 'New term'}
-          </p>
+          <div className="flex items-baseline gap-4 text-2xs text-ink-faint">
+            <span>
+              {policy
+                ? `Editing ${formatUsDate(policy.termStart)} – ${formatUsDate(policy.termEnd)}`
+                : 'New term'}
+            </span>
+            {policy ? (
+              <Link href="/setup?new=1" className="text-ink-muted underline underline-offset-2 hover:text-ink">
+                Start a new term
+              </Link>
+            ) : null}
+          </div>
         </div>
 
         <input type="hidden" name="policyId" value={policy?.id ?? ''} />

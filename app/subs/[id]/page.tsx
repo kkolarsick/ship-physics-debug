@@ -73,7 +73,7 @@ export default async function SubDetailPage({
         }))}
       />
 
-      <section className="grid gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+      <section className="grid items-start gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <div className="panel">
           <div className="panel-head">
             <h2 className="text-sm font-semibold">How this figure was produced</h2>
@@ -104,9 +104,7 @@ export default async function SubDetailPage({
                 </td>
               </tr>
               <tr>
-                <td className="px-3 py-2 text-ink-muted">
-                  × {formatRate(exposure.rate)} ÷ 100 × {formatMod(exposure.experienceMod)}
-                </td>
+                <td className="px-3 py-2 text-ink-muted">Rated</td>
                 <td className="num px-3 py-2 text-ink-muted">
                   {exposure.addedPayroll > 0
                     ? `${formatDollars(exposure.addedPayroll)} ÷ 100 × ${formatRate(exposure.rate)} × ${formatMod(exposure.experienceMod)}`

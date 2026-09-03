@@ -72,6 +72,8 @@ export default async function CertificatesPage() {
       wcEffective: certificate.wcEffective,
       wcExpiration: certificate.wcExpiration,
       status: certificate.status,
+      // Only candidates in the review band are offered as one-click confirmations. A 2%
+      // trigram overlap is noise, and offering it as a button invites a wrong pairing.
       candidates: rankCandidates(
         certificate.normalizedNamedInsured ?? normalizeName(certificate.namedInsured ?? ''),
         subs,
@@ -79,7 +81,9 @@ export default async function CertificatesPage() {
           subcontractorId: alias.subcontractorId,
           normalizedAlias: alias.normalizedAlias,
         })),
-      ).slice(0, 5),
+      )
+        .filter((candidate) => candidate.band !== 'unmatched')
+        .slice(0, 4),
       subs,
     })),
   );
@@ -101,7 +105,7 @@ export default async function CertificatesPage() {
 
       <UnmatchedBin items={unmatchedItems} />
 
-      <section className="grid gap-5 lg:grid-cols-2">
+      <section className="grid items-start gap-5 lg:grid-cols-2">
         <div className="panel">
           <div className="panel-head">
             <h2 className="text-sm font-semibold">Subcontractors with nothing on file</h2>

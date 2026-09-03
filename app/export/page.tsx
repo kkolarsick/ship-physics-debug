@@ -59,7 +59,7 @@ export default async function ExportPage() {
         </div>
       </section>
 
-      <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      <section className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <div className="panel">
           <div className="panel-head">
             <h2 className="text-sm font-semibold">What the export will say</h2>

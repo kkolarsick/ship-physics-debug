@@ -10,14 +10,14 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "lint:copy": "tsx scripts/lint-copy.ts",
     "seed": "tsx scripts/seed.ts",
-    "check": "npm run typecheck && npm run lint:copy && npm run test"
+    "check": "npm run typecheck && npm run lint && npm run lint:copy && npm run test"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.123.0",

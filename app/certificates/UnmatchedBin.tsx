@@ -84,6 +84,11 @@ export function UnmatchedBin({ items }: { items: readonly UnmatchedItem[] }) {
                 </td>
                 <td>
                   <div className="flex flex-wrap items-center gap-1.5">
+                    {item.candidates.length === 0 ? (
+                      <span className="text-2xs text-ink-faint">
+                        No vendor name is close enough to suggest.
+                      </span>
+                    ) : null}
                     {item.candidates.map((candidate) => (
                       <button
                         key={candidate.subcontractorId}

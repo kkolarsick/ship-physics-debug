@@ -27,3 +27,11 @@ Thumbs.db
 
 # Exports written during development
 /exports/
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+
+# TypeScript incremental build cache
+*.tsbuildinfo

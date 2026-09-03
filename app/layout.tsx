@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { loadWorkspace } from '@/lib/app/workspace';
+import { TermSwitcher } from '@/components/TermSwitcher';
 import { formatUsDate } from '@/lib/dates';
 import { formatDollars } from '@/lib/money';
 import './globals.css';
@@ -41,18 +42,24 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               </span>
             </div>
             {workspace?.data.policy ? (
-              <p className="text-2xs text-ink-muted">
-                Audit period {formatUsDate(workspace.data.policy.termStart)} –{' '}
-                {formatUsDate(workspace.data.policy.termEnd)}
-                {workspace.portfolio ? (
-                  <>
-                    {' · '}
-                    <span className="font-semibold text-risk">
-                      {formatDollars(workspace.portfolio.totalExposure)} at risk
-                    </span>
-                  </>
-                ) : null}
-              </p>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                <TermSwitcher
+                  policies={workspace.data.policies}
+                  selectedId={workspace.data.policy.id}
+                />
+                <p className="text-2xs text-ink-muted">
+                  Audit period {formatUsDate(workspace.data.policy.termStart)} –{' '}
+                  {formatUsDate(workspace.data.policy.termEnd)}
+                  {workspace.portfolio ? (
+                    <>
+                      {' · '}
+                      <span className="font-semibold text-risk">
+                        {formatDollars(workspace.portfolio.totalExposure)} at risk
+                      </span>
+                    </>
+                  ) : null}
+                </p>
+              </div>
             ) : null}
           </div>
           <nav className="mx-auto flex max-w-workpaper flex-wrap gap-x-5 gap-y-1 border-t border-rule px-5 py-2 text-sm">

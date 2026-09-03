@@ -22,9 +22,13 @@ export interface Workspace {
   readonly totals: EliminationTotals | null;
 }
 
+/** The term the user is looking at, remembered across screens (brief §9, step 8). */
+export const SELECTED_TERM_COOKIE = 'subledger_policy';
+
 export async function loadWorkspace(policyId?: string): Promise<Workspace> {
   const store = await getStore();
-  const data = await store.loadDataset(policyId);
+  const selected = policyId ?? (await selectedTermFromCookie());
+  const data = await store.loadDataset(selected);
   const mode = storeMode();
 
   if (data.policy === null) {
@@ -52,6 +56,15 @@ export async function loadWorkspace(policyId?: string): Promise<Workspace> {
     portfolio,
     totals: eliminationTotals(chaseWithNames, portfolio.totalExposure),
   };
+}
+
+async function selectedTermFromCookie(): Promise<string | undefined> {
+  try {
+    const { cookies } = await import('next/headers');
+    return (await cookies()).get(SELECTED_TERM_COOKIE)?.value;
+  } catch {
+    return undefined;
+  }
 }
 
 /** Payments for one sub, oldest first — the order the timeline draws them in. */

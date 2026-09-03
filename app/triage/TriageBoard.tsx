@@ -132,7 +132,7 @@ export function TriageBoard({ rows }: { rows: readonly TriageRow[] }) {
               <th className="text-right">Payments</th>
               <th className="text-right">Paid in term</th>
               <th>Certificate</th>
-              <th className="w-72">Decision</th>
+              <th className="w-[24rem]">Decision</th>
             </tr>
           </thead>
           <tbody>
@@ -156,7 +156,7 @@ export function TriageBoard({ rows }: { rows: readonly TriageRow[] }) {
                 </td>
                 <td className="text-ink-muted">{row.hasCertificate ? 'On file' : 'None on file'}</td>
                 <td>
-                  <div className="flex flex-wrap gap-1.5">
+                  <div className="flex flex-wrap gap-1.5 whitespace-nowrap">
                     {CHOICES.map((choice) => {
                       const active = row.triage === choice.value;
                       return (

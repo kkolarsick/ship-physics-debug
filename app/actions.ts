@@ -8,6 +8,7 @@
  * to a carrier's auditor in a dispute, so a figure that changed without a trace is worse
  * than no figure at all.
  */
+import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { RULESET } from '@/lib/exposure/ruleset';
@@ -28,6 +29,7 @@ import {
   triageRequestSchema,
 } from '@/lib/schemas';
 import { sendChaseEmail } from '@/lib/chase/send';
+import { SELECTED_TERM_COOKIE } from '@/lib/app/workspace';
 
 export interface ActionResult {
   readonly ok: boolean;
@@ -93,6 +95,32 @@ export async function savePolicyAction(
 
   refreshAll();
   return { ok: true, message: 'Policy term saved.' };
+}
+
+/**
+ * Switch the term being looked at. Earlier terms stay readable — a figure produced in
+ * March has to be explainable in November, and that includes the term it belonged to.
+ */
+export async function selectPolicyTermAction(policyId: string): Promise<ActionResult> {
+  const parsed = z.string().uuid().safeParse(policyId);
+  if (!parsed.success) return fail(parsed.error);
+
+  const store = await getStore();
+  const policies = await store.listPolicies();
+  if (!policies.some((policy) => policy.id === parsed.data)) {
+    return { ok: false, message: 'That policy term does not exist.' };
+  }
+
+  const jar = await cookies();
+  jar.set(SELECTED_TERM_COOKIE, parsed.data, {
+    httpOnly: true,
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 60 * 60 * 24 * 365,
+  });
+
+  refreshAll();
+  return ok;
 }
 
 // ---------------------------------------------------------------------------
