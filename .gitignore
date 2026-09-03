@@ -21,3 +21,9 @@ yarn-error.log*
 .idea/
 .DS_Store
 Thumbs.db
+
+# Local demo store (see lib/db/demo-store.ts)
+.data/
+
+# Exports written during development
+/exports/
