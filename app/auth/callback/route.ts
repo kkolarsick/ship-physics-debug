@@ -5,8 +5,9 @@ import { createServerSupabase } from '@/lib/db/supabase';
  * Completes the emailed sign-in, then makes sure the account belongs to an org.
  *
  * Row-level security keys on org membership, so an account with no membership can read
- * nothing at all. Creating the org here is what turns a fresh sign-in into a usable
- * workspace; an existing member falls straight through.
+ * nothing at all. Fresh workspaces are created through a SECURITY DEFINER RPC that
+ * atomically creates the org and its owner membership for auth.uid(); clients cannot
+ * self-insert arbitrary org membership rows.
  */
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -33,17 +34,14 @@ export async function GET(request: Request) {
     .maybeSingle();
 
   if (!membership) {
-    const { data: org, error: orgError } = await supabase
-      .from('orgs')
-      .insert({ name: data.user.email ?? 'Your company' })
-      .select('id')
-      .single();
+    const { error: orgError } = await supabase.rpc('create_org_for_current_user', {
+      org_name: data.user.email ?? 'Your company',
+    });
     if (orgError) {
       return NextResponse.redirect(
         new URL(`/sign-in?error=${encodeURIComponent(orgError.message)}`, url.origin),
       );
     }
-    await supabase.from('org_members').insert({ org_id: org.id, user_id: data.user.id });
     return NextResponse.redirect(new URL('/setup', url.origin));
   }
 
