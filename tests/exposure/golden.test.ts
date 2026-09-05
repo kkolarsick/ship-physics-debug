@@ -5,19 +5,20 @@ import {
   GOLDEN_EXPECTATIONS,
   GOLDEN_PAYMENTS,
   GOLDEN_POLICY,
+  GOLDEN_PROFILE,
   GOLDEN_SUBS,
   GOLDEN_TOTALS,
 } from '@/lib/exposure/fixtures';
 import { formatDollars } from '@/lib/money';
 
 describe('golden fixtures (brief §6d)', () => {
-  const portfolio = computePortfolioExposure(
-    GOLDEN_SUBS,
-    GOLDEN_PAYMENTS,
-    GOLDEN_CERTIFICATES,
-    GOLDEN_POLICY,
-    '2026-01-15T00:00:00.000Z',
-  );
+  const portfolio = computePortfolioExposure({
+    subs: GOLDEN_SUBS,
+    payments: GOLDEN_PAYMENTS,
+    certificates: GOLDEN_CERTIFICATES,
+    policy: GOLDEN_POLICY,
+    computedAt: '2026-01-15T00:00:00.000Z',
+  });
   const bySub = new Map(portfolio.subs.map((s) => [s.subcontractorId, s]));
 
   for (const expectation of GOLDEN_EXPECTATIONS) {
@@ -40,8 +41,9 @@ describe('golden fixtures (brief §6d)', () => {
     expect(formatDollars(portfolio.totalExposure)).toBe('$52,822');
   });
 
-  it('adds no surcharge when the policy percentage is zero', () => {
-    expect(portfolio.surcharge).toBe(0);
+  it('adds no audit noncompliance charge when the audit went fine', () => {
+    expect(portfolio.auditNoncompliance.applies).toBe(false);
+    expect(portfolio.auditNoncompliance.charge).toBe(0);
     expect(portfolio.totalExposure).toBe(portfolio.addedPremiumBeforeSurcharge);
   });
 
@@ -55,7 +57,9 @@ describe('golden fixtures (brief §6d)', () => {
   it('ranks the chase list by premium removed per call, not by invoice size', () => {
     // B&K at $58,200 with nothing on file outranks nobody here, but Ridgeline at $143,000
     // whose certificate is merely late does not outrank Kowalczyk's larger exposure.
-    const ranked = portfolio.subs.filter((s) => s.addedPremium > 0).map((s) => s.subcontractorId);
+    const ranked = portfolio.subs
+      .filter((s) => (s.addedPremium ?? 0) > 0)
+      .map((s) => s.subcontractorId);
     expect(ranked).toEqual(['ridgeline', 'kowalczyk', 'vega', 'bk-drywall']);
   });
 
@@ -67,15 +71,64 @@ describe('golden fixtures (brief §6d)', () => {
     expect(portfolio.clearedBySplitInvoice).toBeLessThan(portfolio.addedPremiumBeforeSurcharge);
   });
 
-  it('stamps the ruleset version on every result', () => {
+  it('resolves the NCCI profile from the jurisdiction on the policy', () => {
+    expect(portfolio.status).toBe('estimated');
+    expect(portfolio.rulesProfile?.rulesetId).toBe(GOLDEN_PROFILE.rulesetId);
+    expect(portfolio.provenance.jurisdiction).toBe('US-TN');
+  });
+
+  it('stamps the ruleset on every result', () => {
     for (const result of portfolio.subs) {
-      expect(result.rulesetVersion).toBe(portfolio.rulesetVersion);
+      expect(result.provenance.rulesetId).toBe(portfolio.provenance.rulesetId);
+      expect(result.provenance.rulesetVersion).toBe(portfolio.provenance.rulesetVersion);
+    }
+  });
+
+  it('tests coverage against the period the work was performed, not the check date', () => {
+    for (const result of portfolio.subs) {
+      expect(result.usedPaymentDateProxy).toBe(false);
+      for (const assessment of result.assessments) {
+        expect(assessment.basis).toBe('work_period');
+      }
+    }
+  });
+
+  it('rates every subcontractor at a class recorded for its own trade, not a proxy', () => {
+    for (const result of portfolio.subs) {
+      expect(result.rate.provenance).toBe('subcontractor_class');
+    }
+    expect(portfolio.proxyRatedPremium).toBe(0);
+    expect(portfolio.unratedPayroll).toBe(0);
+  });
+
+  it('names exactly the two assumptions this set rests on', () => {
+    // The shipped NCCI profile is a draft until someone checks it against the Basic
+    // Manual, and two of these subcontractors have hand-entered labor/material splits.
+    // Nothing else here is assumed, and the figure says so rather than implying otherwise.
+    expect(portfolio.confidence.level).toBe('medium');
+    expect(portfolio.confidence.assumptions).toEqual([
+      'The treatment applied is this product’s model of the jurisdiction, not a transcription of the bureau’s manual.',
+      'Hand-entered figures are the user’s assertion; nothing in this product verifies them against a document.',
+    ]);
+  });
+
+  it('reports every subcontractor as estimated, none withheld', () => {
+    for (const result of portfolio.subs) {
+      expect(result.status).toBe('estimated');
+      expect(result.unavailable).toBeNull();
     }
   });
 
   it('recomputes identically one sub at a time', () => {
     for (const sub of GOLDEN_SUBS) {
-      const single = computeExposure(sub, GOLDEN_PAYMENTS, GOLDEN_CERTIFICATES, GOLDEN_POLICY);
+      const single = computeExposure(
+        sub,
+        GOLDEN_PAYMENTS,
+        GOLDEN_CERTIFICATES,
+        GOLDEN_POLICY,
+        GOLDEN_PROFILE,
+        '2026-01-15T00:00:00.000Z',
+      );
       expect(single.addedPremium).toBe(bySub.get(sub.id)?.addedPremium);
     }
   });

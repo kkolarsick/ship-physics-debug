@@ -72,10 +72,14 @@ export default async function SubsPage() {
                     <Money cents={sub.uncoveredTotal} />
                   </td>
                   <td className="num font-semibold text-risk">
-                    <Money cents={sub.addedPremium} />
+                    {sub.addedPremium === null ? (
+                      <span className="text-note">unrated</span>
+                    ) : (
+                      <Money cents={sub.addedPremium} />
+                    )}
                   </td>
                   <td className="text-ink-muted">
-                    {sub.addedPremium > 0
+                    {(sub.addedPremium ?? 0) > 0
                       ? COVERAGE_LANGUAGE.uncovered
                       : sub.zeroReason
                         ? ZERO_REASON_LABELS[sub.zeroReason]

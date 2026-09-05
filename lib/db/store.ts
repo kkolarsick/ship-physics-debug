@@ -25,6 +25,9 @@ import type { TriageDecision } from '@/lib/exposure/types';
 export interface NewPayment {
   readonly subcontractorId: string;
   readonly paidOn: string;
+  /** The period the work was performed, when the ledger carried it. Both or neither. */
+  readonly workFrom: string | null;
+  readonly workTo: string | null;
   readonly amount: number;
   readonly sourceRef: string | null;
   readonly memo: string | null;
@@ -47,7 +50,9 @@ export interface Store {
   setTriage(subcontractorId: string, triage: TriageDecision): Promise<void>;
   patchSubcontractor(
     subcontractorId: string,
-    patch: Partial<Pick<SubcontractorRecord, 'entityType' | 'trade' | 'notes'>> & {
+    patch: Partial<
+      Pick<SubcontractorRecord, 'entityType' | 'trade' | 'notes' | 'specialCategory' | 'priorAuditRate'>
+    > & {
       classCodeRateId?: string | null;
     },
   ): Promise<void>;
@@ -65,6 +70,13 @@ export interface Store {
     materialEvidence: PaymentRecord['materialEvidence'],
   ): Promise<void>;
 
+  /** Record when the work behind a payment was actually performed. */
+  setPaymentWorkPeriod(
+    paymentId: string,
+    workFrom: string | null,
+    workTo: string | null,
+  ): Promise<void>;
+
   createCertificate(
     input: Omit<CertificateRecord, 'id' | 'orgId' | 'createdAt'>,
   ): Promise<CertificateRecord>;
@@ -75,7 +87,7 @@ export interface Store {
   matchCertificate(
     certificateId: string,
     subcontractorId: string | null,
-    options: { saveAlias: boolean },
+    options: { saveAlias: boolean; method?: CertificateRecord['matchMethod'] },
   ): Promise<void>;
   listAliases(): Promise<readonly AliasRecord[]>;
 

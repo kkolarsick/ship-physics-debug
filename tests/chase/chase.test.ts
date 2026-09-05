@@ -11,13 +11,13 @@ import { draftChaseEmail, CHASE_ASK_LABELS } from '@/lib/chase/templates';
 import { findCopyViolations } from '@/lib/copy';
 import type { ChaseItem } from '@/lib/chase/types';
 
-const portfolio = computePortfolioExposure(
-  GOLDEN_SUBS,
-  GOLDEN_PAYMENTS,
-  GOLDEN_CERTIFICATES,
-  GOLDEN_POLICY,
-  '2026-01-15T00:00:00.000Z',
-);
+const portfolio = computePortfolioExposure({
+  subs: GOLDEN_SUBS,
+  payments: GOLDEN_PAYMENTS,
+  certificates: GOLDEN_CERTIFICATES,
+  policy: GOLDEN_POLICY,
+  computedAt: '2026-01-15T00:00:00.000Z',
+});
 
 describe('proposeChaseItems', () => {
   const proposals = proposeChaseItems(portfolio.subs, {

@@ -36,15 +36,19 @@ export function proposeChaseItems(
   const proposals: ProposedChaseItem[] = [];
 
   for (const exposure of exposures) {
-    if (exposure.addedPremium <= 0) continue;
+    // A subcontractor with no defensible rate has payroll but no premium figure, so there
+    // is no "dollars removed per call" to rank it by. It is chased from the subcontractor
+    // page, where the missing class is the thing to fix first.
+    const addedPremium = exposure.addedPremium;
+    if (addedPremium === null || addedPremium <= 0) continue;
 
     proposals.push({
       subcontractorId: exposure.subcontractorId,
       subcontractorName: exposure.subcontractorName,
       ask: 'certificate',
-      worth: exposure.ifCertificateObtained,
-      exposureAtOpen: exposure.addedPremium,
-      rationale: 'A certificate covering the payment dates removes the whole figure.',
+      worth: exposure.ifCertificateObtained ?? addedPremium,
+      exposureAtOpen: addedPremium,
+      rationale: 'A certificate covering the period the work was performed removes the whole figure.',
     });
 
     const producerEmail = options.producerEmailBySub?.[exposure.subcontractorId] ?? null;
@@ -53,19 +57,19 @@ export function proposeChaseItems(
         subcontractorId: exposure.subcontractorId,
         subcontractorName: exposure.subcontractorName,
         ask: 'agent_direct',
-        worth: exposure.ifCertificateObtained,
-        exposureAtOpen: exposure.addedPremium,
+        worth: exposure.ifCertificateObtained ?? addedPremium,
+        exposureAtOpen: addedPremium,
         rationale: `Their agent is on a prior certificate (${producerEmail}) and is usually faster than the sub.`,
       });
     }
 
-    if (exposure.ifSplitInvoiceObtained > 0) {
+    if ((exposure.ifSplitInvoiceObtained ?? 0) > 0) {
       proposals.push({
         subcontractorId: exposure.subcontractorId,
         subcontractorName: exposure.subcontractorName,
         ask: 'split_invoice',
-        worth: exposure.ifSplitInvoiceObtained,
-        exposureAtOpen: exposure.addedPremium,
+        worth: exposure.ifSplitInvoiceObtained ?? 0,
+        exposureAtOpen: addedPremium,
         rationale: 'The fallback when the sub is defunct, gone, or cannot produce a certificate.',
       });
     }
@@ -76,7 +80,7 @@ export function proposeChaseItems(
         subcontractorName: exposure.subcontractorName,
         ask: 'entity_clarification',
         worth: 0,
-        exposureAtOpen: exposure.addedPremium,
+        exposureAtOpen: addedPremium,
         rationale: 'Recorded as a sole proprietor — the answer is a question for your auditor.',
       });
     }

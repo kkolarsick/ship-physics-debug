@@ -12,14 +12,24 @@ import type { OrgRecord, PolicyRecord } from '@/lib/db/types';
  * declarations page or the most recent audit statement, because a contractor filling this
  * in has the paperwork in front of them and no idea which line matters.
  */
+export interface JurisdictionOption {
+  jurisdiction: string;
+  ratingBureau: string;
+  label: string;
+  status: string;
+  producesEstimates: boolean;
+}
+
 export function SetupForm({
   org,
   policy,
   policies,
+  jurisdictions,
 }: {
   org: OrgRecord;
   policy: PolicyRecord | null;
   policies: readonly PolicyRecord[];
+  jurisdictions: readonly JurisdictionOption[];
 }) {
   const [state, action, pending] = useActionState<ActionResult | null, FormData>(
     savePolicyAction,
@@ -118,14 +128,136 @@ export function SetupForm({
             hint="The estimated premium on the declarations page. Used only as the base for a surcharge."
             error={state?.fieldErrors?.estimatedAnnualPremium}
           />
-          <Field
-            label="Non-compliance surcharge %"
-            name="noncomplianceSurchargePct"
-            defaultValue={policy ? formatPct(policy.noncomplianceSurchargePct).replace('%', '') : '0'}
-            placeholder="0"
-            hint="Some policies carry one where records are inadequate. Check your policy; leave 0 if there is none."
-            error={state?.fieldErrors?.noncomplianceSurchargePct}
-          />
+        </div>
+
+        <div className="border-t border-rule px-5 py-5">
+          <h2 className="text-sm font-semibold">Which rules govern this policy</h2>
+          <p className="mt-1 max-w-2xl text-2xs text-ink-faint">
+            Audit treatment of uninsured subcontract cost is set by the state and rating bureau
+            that govern your policy, and it differs materially between them. Without a
+            jurisdiction this product produces no estimate rather than borrowing another
+            jurisdiction’s treatment.
+          </p>
+
+          <div className="mt-4 grid gap-x-5 gap-y-4 sm:grid-cols-2">
+            <label className="block">
+              <span className="label">
+                Jurisdiction<span className="text-risk"> *</span>
+              </span>
+              <select
+                className="field mt-1"
+                name="jurisdiction"
+                defaultValue={policy?.jurisdiction ?? ''}
+              >
+                <option value="">Choose the state on your policy…</option>
+                {jurisdictions.map((entry) => (
+                  <option key={entry.jurisdiction} value={entry.jurisdiction}>
+                    {entry.jurisdiction} — {entry.ratingBureau}
+                    {entry.producesEstimates ? '' : ' (rules not yet populated)'}
+                  </option>
+                ))}
+              </select>
+              <span className="mt-1 block text-2xs text-ink-faint">
+                The state whose rules govern this policy. Only jurisdictions this build carries
+                a rules profile for are listed.
+              </span>
+              {state?.fieldErrors?.jurisdiction ? (
+                <span className="mt-1 block text-2xs text-risk">
+                  {state.fieldErrors.jurisdiction}
+                </span>
+              ) : null}
+            </label>
+
+            <Field
+              label="Rating bureau"
+              name="ratingBureau"
+              defaultValue={policy?.ratingBureau ?? ''}
+              placeholder="NCCI"
+              hint="Optional. Leave blank to accept the bureau this build associates with the jurisdiction; fill it in to have a mismatch rejected rather than assumed."
+              error={state?.fieldErrors?.ratingBureau}
+            />
+          </div>
+        </div>
+
+        <div className="border-t border-rule px-5 py-5">
+          <h2 className="text-sm font-semibold">Audit compliance</h2>
+          <p className="mt-1 max-w-2xl text-2xs text-ink-faint">
+            An audit noncompliance charge is about the audit itself. A subcontractor lacking a
+            certificate does not trigger one, and nothing below is inferred from your exposure
+            figure — if none of these is true, the charge is zero.
+          </p>
+
+          <div className="mt-4 space-y-2.5 text-sm">
+            <label className="flex items-start gap-2">
+              <input
+                type="checkbox"
+                name="auditEndorsementOnPolicy"
+                defaultChecked={policy?.auditCompliance.endorsementOnPolicy ?? false}
+                className="mt-1"
+              />
+              <span>
+                The policy carries an audit noncompliance endorsement
+                <span className="block text-2xs text-ink-faint">
+                  Check your declarations page for an endorsement schedule.
+                </span>
+              </span>
+            </label>
+
+            <label className="flex items-start gap-2">
+              <input
+                type="checkbox"
+                name="auditRecordsFurnished"
+                defaultChecked={policy?.auditCompliance.recordsFurnished ?? true}
+                className="mt-1"
+              />
+              <span>
+                Records the auditor requested were furnished
+                <span className="block text-2xs text-ink-faint">
+                  Leave checked unless an auditor asked for records you did not provide.
+                </span>
+              </span>
+            </label>
+
+            <label className="flex items-start gap-2">
+              <input
+                type="checkbox"
+                name="auditPermitted"
+                defaultChecked={policy?.auditCompliance.auditPermitted ?? true}
+                className="mt-1"
+              />
+              <span>
+                The audit was permitted to take place
+                <span className="block text-2xs text-ink-faint">
+                  Leave checked unless an audit was refused or could not be scheduled.
+                </span>
+              </span>
+            </label>
+
+            <label className="flex items-start gap-2">
+              <input
+                type="checkbox"
+                name="auditEstimatedIssued"
+                defaultChecked={policy?.auditCompliance.estimatedAuditIssued ?? false}
+                className="mt-1"
+              />
+              <span>
+                The carrier has already issued an estimated audit for this term
+              </span>
+            </label>
+          </div>
+
+          <div className="mt-4 max-w-sm">
+            <Field
+              label="Noncompliance percentage on your policy"
+              name="carrierConfiguredNoncompliancePct"
+              defaultValue={
+                policy ? formatPct(policy.auditCompliance.carrierConfiguredPct).replace('%', '') : '0'
+              }
+              placeholder="0"
+              hint="From the endorsement itself. Used only where the rules profile reads the percentage off your own policy, and only when an audit condition above is recorded."
+              error={state?.fieldErrors?.carrierConfiguredNoncompliancePct}
+            />
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-4 border-t border-rule px-5 py-3">
@@ -165,6 +297,14 @@ export function SetupForm({
                 question — it is all arithmetic inputs.
               </dd>
             </div>
+            <div>
+              <dt className="label">Why the jurisdiction is required</dt>
+              <dd className="mt-0.5 text-ink-muted">
+                It decides which rules profile applies, and the profiles differ on the things
+                that move dollars: whether a labor/material split is permitted at all, what it is
+                capped at, and what class the added payroll is rated at.
+              </dd>
+            </div>
           </dl>
         </section>
 
@@ -181,6 +321,7 @@ export function SetupForm({
                     <td className="text-ink-muted">
                       {formatUsDate(entry.termStart)} – {formatUsDate(entry.termEnd)}
                     </td>
+                    <td className="text-ink-muted">{entry.jurisdiction ?? '—'}</td>
                     <td className="num">{formatRate(entry.governingRate)}</td>
                   </tr>
                 ))}

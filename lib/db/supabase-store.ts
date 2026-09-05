@@ -107,9 +107,18 @@ export class SupabaseStore implements Store {
       term_end: input.termEnd,
       experience_mod_thousandths: input.experienceMod,
       estimated_annual_premium_cents: input.estimatedAnnualPremium,
-      noncompliance_surcharge_pct_ten_thousandths: input.noncomplianceSurchargePct,
+      carrier_configured_noncompliance_pct_ten_thousandths:
+        input.auditCompliance.carrierConfiguredPct,
       governing_class_code: input.governingClassCode,
       governing_rate_ten_thousandths: input.governingRate,
+      jurisdiction: input.jurisdiction,
+      rating_bureau: input.ratingBureau,
+      ruleset_id: input.rulesetId,
+      ruleset_version: input.rulesetVersion,
+      audit_endorsement_on_policy: input.auditCompliance.endorsementOnPolicy,
+      audit_records_furnished: input.auditCompliance.recordsFurnished,
+      audit_permitted: input.auditCompliance.auditPermitted,
+      audit_estimated_issued: input.auditCompliance.estimatedAuditIssued,
     };
 
     const { data, error } = await this.client
@@ -200,7 +209,9 @@ export class SupabaseStore implements Store {
 
   async patchSubcontractor(
     subcontractorId: string,
-    patch: Partial<Pick<SubcontractorRecord, 'entityType' | 'trade' | 'notes'>> & {
+    patch: Partial<
+      Pick<SubcontractorRecord, 'entityType' | 'trade' | 'notes' | 'specialCategory' | 'priorAuditRate'>
+    > & {
       classCodeRateId?: string | null;
     },
   ): Promise<void> {
@@ -208,6 +219,11 @@ export class SupabaseStore implements Store {
     if (patch.entityType !== undefined) update.entity_type = patch.entityType;
     if (patch.trade !== undefined) update.trade = patch.trade;
     if (patch.notes !== undefined) update.notes = patch.notes;
+    if (patch.specialCategory !== undefined) update.special_category = patch.specialCategory;
+    if (patch.priorAuditRate !== undefined) {
+      update.prior_audit_class_code = patch.priorAuditRate?.classCode ?? null;
+      update.prior_audit_rate_ten_thousandths = patch.priorAuditRate?.rate ?? null;
+    }
     if (patch.classCodeRateId !== undefined) update.class_code_override_id = patch.classCodeRateId;
     if (Object.keys(update).length === 0) return;
 
@@ -266,6 +282,8 @@ export class SupabaseStore implements Store {
           org_id: this.orgId,
           subcontractor_id: payment.subcontractorId,
           paid_on: payment.paidOn,
+          work_from: payment.workFrom,
+          work_to: payment.workTo,
           amount_cents: payment.amount,
           source_ref: payment.sourceRef,
           imported_batch_id: batch.id,
@@ -333,6 +351,29 @@ export class SupabaseStore implements Store {
     });
   }
 
+  async setPaymentWorkPeriod(
+    paymentId: string,
+    workFrom: string | null,
+    workTo: string | null,
+  ): Promise<void> {
+    const before = (
+      await this.client.from('payments').select('work_from, work_to').eq('id', paymentId).single()
+    ).data;
+    const { error } = await this.client
+      .from('payments')
+      .update({ work_from: workFrom, work_to: workTo })
+      .eq('id', paymentId);
+    if (error) throw new Error(`payments: ${error.message}`);
+    await this.appendAuditEvent({
+      actor: this.actor,
+      entityType: 'payment',
+      entityId: paymentId,
+      action: 'work_period',
+      before,
+      after: { work_from: workFrom, work_to: workTo },
+    });
+  }
+
   async createCertificate(
     input: Omit<CertificateRecord, 'id' | 'orgId' | 'createdAt'>,
   ): Promise<CertificateRecord> {
@@ -380,7 +421,7 @@ export class SupabaseStore implements Store {
   async matchCertificate(
     certificateId: string,
     subcontractorId: string | null,
-    options: { saveAlias: boolean },
+    options: { saveAlias: boolean; method?: CertificateRecord['matchMethod'] },
   ): Promise<void> {
     const { data: before, error: readError } = await this.client
       .from('certificates')
@@ -393,6 +434,7 @@ export class SupabaseStore implements Store {
       .from('certificates')
       .update({
         subcontractor_id: subcontractorId,
+        match_method: subcontractorId === null ? 'unmatched' : (options.method ?? 'manual'),
         ...(subcontractorId === null ? {} : { status: 'matched' }),
       })
       .eq('id', certificateId);
@@ -485,11 +527,20 @@ export class SupabaseStore implements Store {
       .insert({
         org_id: this.orgId,
         policy_id: portfolio.policyId,
-        ruleset_version: portfolio.rulesetVersion,
+        ruleset_id: portfolio.provenance.rulesetId,
+        ruleset_version: portfolio.provenance.rulesetVersion,
+        jurisdiction: portfolio.provenance.jurisdiction,
+        rating_bureau: portfolio.provenance.ratingBureau,
+        confidence_level: portfolio.confidence.level,
         total_exposure_cents: portfolio.totalExposure,
         added_payroll_cents: portfolio.addedPayroll,
-        surcharge_cents: portfolio.surcharge,
+        surcharge_cents: portfolio.auditNoncompliance.charge,
         detail: portfolio.subs,
+        provenance: {
+          ...portfolio.provenance,
+          confidence: portfolio.confidence,
+          auditNoncompliance: portfolio.auditNoncompliance,
+        },
         reason,
       })
       .select('*')
@@ -575,9 +626,19 @@ function toPolicy(row: Row): PolicyRecord {
     termEnd: String(row.term_end),
     experienceMod: num(row.experience_mod_thousandths, 1000),
     estimatedAnnualPremium: num(row.estimated_annual_premium_cents),
-    noncomplianceSurchargePct: num(row.noncompliance_surcharge_pct_ten_thousandths),
     governingClassCode: String(row.governing_class_code ?? ''),
     governingRate: num(row.governing_rate_ten_thousandths),
+    jurisdiction: str(row.jurisdiction),
+    ratingBureau: str(row.rating_bureau),
+    rulesetId: str(row.ruleset_id),
+    rulesetVersion: str(row.ruleset_version),
+    auditCompliance: {
+      endorsementOnPolicy: Boolean(row.audit_endorsement_on_policy),
+      recordsFurnished: row.audit_records_furnished === undefined ? true : Boolean(row.audit_records_furnished),
+      auditPermitted: row.audit_permitted === undefined ? true : Boolean(row.audit_permitted),
+      estimatedAuditIssued: Boolean(row.audit_estimated_issued),
+      carrierConfiguredPct: num(row.carrier_configured_noncompliance_pct_ten_thousandths),
+    },
     createdAt: String(row.created_at),
   };
 }
@@ -607,6 +668,14 @@ function toSubcontractor(
     trade: str(row.trade),
     triage: (row.triage as SubcontractorRecord['triage']) ?? 'undecided',
     classCodeOverride: override ? { classCode: override.classCode, rate: override.rate } : null,
+    priorAuditRate:
+      row.prior_audit_class_code && row.prior_audit_rate_ten_thousandths !== null
+        ? {
+            classCode: String(row.prior_audit_class_code),
+            rate: num(row.prior_audit_rate_ten_thousandths),
+          }
+        : null,
+    specialCategory: (str(row.special_category) as SubcontractorRecord['specialCategory']) ?? null,
     notes: str(row.notes),
   };
 }
@@ -617,6 +686,8 @@ function toPayment(row: Row): PaymentRecord {
     orgId: String(row.org_id),
     subcontractorId: String(row.subcontractor_id),
     paidOn: String(row.paid_on),
+    workFrom: str(row.work_from),
+    workTo: str(row.work_to),
     amount: num(row.amount_cents),
     sourceRef: str(row.source_ref),
     memo: null,
@@ -655,6 +726,15 @@ function toCertificate(row: Row): CertificateRecord {
     extractionError: str(row.extraction_error),
     rawExtraction: row.raw_extraction ?? null,
     reviewedByUserAt: str(row.reviewed_by_user_at),
+    matchMethod: (str(row.match_method) as CertificateRecord['matchMethod']) ?? 'unmatched',
+    // How the fields came to be what they are, for the confidence model: a person's entry
+    // and a person's review both count as confirmed; anything else is a machine reading.
+    evidence:
+      row.reviewed_by_user_at !== null && row.reviewed_by_user_at !== undefined
+        ? 'reviewed_by_user'
+        : row.raw_extraction
+          ? 'model_extracted'
+          : 'entered_by_user',
     createdAt: String(row.created_at),
   };
 }
@@ -693,6 +773,7 @@ function certificatePayload(
   set('extraction_error', input.extractionError);
   set('raw_extraction', input.rawExtraction);
   set('reviewed_by_user_at', input.reviewedByUserAt);
+  set('match_method', input.matchMethod);
   return payload;
 }
 
@@ -751,7 +832,11 @@ function toSnapshot(row: Row): ExposureSnapshotRecord {
     id: String(row.id),
     orgId: String(row.org_id),
     policyId: String(row.policy_id),
+    rulesetId: String(row.ruleset_id ?? 'unresolved'),
     rulesetVersion: String(row.ruleset_version),
+    jurisdiction: str(row.jurisdiction),
+    ratingBureau: str(row.rating_bureau),
+    confidenceLevel: str(row.confidence_level),
     totalExposure: num(row.total_exposure_cents),
     addedPayroll: num(row.added_payroll_cents),
     surcharge: num(row.surcharge_cents),

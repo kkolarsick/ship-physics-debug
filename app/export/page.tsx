@@ -2,7 +2,6 @@ import { EmptyState } from '@/components/EmptyState';
 import { Disclaimer } from '@/components/Disclaimer';
 import { Money } from '@/components/Money';
 import { loadWorkspace } from '@/lib/app/workspace';
-import { RULESET_STATEMENTS } from '@/lib/exposure/ruleset';
 import { formatUsDate } from '@/lib/dates';
 
 export const dynamic = 'force-dynamic';
@@ -63,10 +62,12 @@ export default async function ExportPage() {
         <div className="panel">
           <div className="panel-head">
             <h2 className="text-sm font-semibold">What the export will say</h2>
-            <p className="text-2xs text-ink-faint">Ruleset {portfolio.rulesetVersion}</p>
+            <p className="text-2xs text-ink-faint">
+              {portfolio.provenance.rulesetId} {portfolio.provenance.rulesetVersion}
+            </p>
           </div>
           <ol className="space-y-2.5 px-5 py-4 text-sm text-ink-muted">
-            {RULESET_STATEMENTS.map((statement, index) => (
+            {(portfolio.rulesProfile?.statements ?? []).map((statement: string, index: number) => (
               <li key={statement} className="flex gap-2">
                 <span className="text-ink-faint">{index + 1}.</span>
                 <span>{statement}</span>
@@ -99,7 +100,9 @@ export default async function ExportPage() {
                   <td className="num">
                     <Money cents={snapshot.totalExposure} />
                   </td>
-                  <td className="text-ink-muted">{snapshot.rulesetVersion}</td>
+                  <td className="text-ink-muted">
+                    {snapshot.rulesetId} {snapshot.rulesetVersion}
+                  </td>
                 </tr>
               ))}
               {history.length === 0 ? (
@@ -115,7 +118,9 @@ export default async function ExportPage() {
         </div>
       </section>
 
-      <Disclaimer rulesetVersion={portfolio.rulesetVersion} />
+      <Disclaimer
+        rulesetVersion={`${portfolio.provenance.rulesetId} ${portfolio.provenance.rulesetVersion}`}
+      />
     </div>
   );
 }

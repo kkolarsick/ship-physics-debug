@@ -35,12 +35,12 @@ export async function loadWorkspace(policyId?: string): Promise<Workspace> {
     return { store, mode, data, portfolio: null, totals: null };
   }
 
-  const portfolio = computePortfolioExposure(
-    data.subcontractors,
-    data.payments,
-    data.certificates,
-    data.policy,
-  );
+  const portfolio = computePortfolioExposure({
+    subs: data.subcontractors,
+    payments: data.payments,
+    certificates: data.certificates,
+    policy: data.policy,
+  });
 
   const chaseWithNames = data.chaseItems.map((item) => ({
     ...item,

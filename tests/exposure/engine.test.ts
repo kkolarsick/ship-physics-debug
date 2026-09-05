@@ -1,76 +1,31 @@
 import { describe, expect, it } from 'vitest';
 import { computeExposure, computePortfolioExposure } from '@/lib/exposure/compute';
 import { mergeOverlappingWindows } from '@/lib/exposure/windows';
-import type {
-  CertificateInput,
-  PaymentInput,
-  PolicyInput,
-  SubcontractorInput,
-} from '@/lib/exposure/types';
+import { PROFILE_INVOICE_SPLIT, TEST_CATALOGUE } from '../fixtures/profiles';
+import { cert, dollars, payment, policy, sub } from '../fixtures/scenario';
 
-const dollars = (amount: number): number => Math.round(amount * 100);
+/**
+ * The engine's own behaviour, held under one profile so the arithmetic is the subject.
+ * How that behaviour changes between jurisdictions is in rules-profiles.test.ts.
+ */
+const PROFILE = PROFILE_INVOICE_SPLIT;
 
-const POLICY: PolicyInput = {
-  id: 'p1',
-  termStart: '2025-01-01',
-  termEnd: '2025-12-31',
-  experienceMod: 1_050,
-  estimatedAnnualPremium: dollars(180_000),
-  noncomplianceSurchargePct: 0,
-  governingClassCode: '5645',
-  governingRate: 124_000,
-};
-
-function sub(overrides: Partial<SubcontractorInput> = {}): SubcontractorInput {
-  return {
-    id: 's1',
-    name: 'Test Sub',
-    entityType: 'llc',
-    trade: 'General',
-    triage: 'subcontractor',
-    classCodeOverride: null,
-    ...overrides,
-  };
-}
-
-function payment(overrides: Partial<PaymentInput> & { paidOn: string; amount: number }): PaymentInput {
-  return {
-    id: `pay-${overrides.paidOn}-${overrides.amount}`,
-    subcontractorId: 's1',
-    sourceRef: null,
-    materialAmount: null,
-    materialEvidence: 'none',
-    ...overrides,
-  };
-}
-
-function cert(overrides: Partial<CertificateInput> = {}): CertificateInput {
-  return {
-    id: 'c1',
-    subcontractorId: 's1',
-    namedInsured: 'Test Sub LLC',
-    wcPresent: true,
-    wcEffective: '2025-01-01',
-    wcExpiration: '2025-12-31',
-    wcOfficerExclusionNoted: false,
-    glPresent: true,
-    producerName: null,
-    producerEmail: null,
-    ...overrides,
-  };
+/** Work performed on the given day, paid a fortnight later. */
+function work(on: string, amount: number, extra: Record<string, unknown> = {}) {
+  return payment({ workFrom: on, workTo: on, paidOn: on, amount, ...extra });
 }
 
 describe('partial coverage', () => {
   it('prices only the uncovered slice: 200,000 paid, 120,000 covered → 80,000 payroll', () => {
     const payments = [
-      payment({ paidOn: '2025-02-01', amount: dollars(70_000) }),
-      payment({ paidOn: '2025-04-15', amount: dollars(50_000) }),
-      payment({ paidOn: '2025-07-01', amount: dollars(45_000) }),
-      payment({ paidOn: '2025-10-20', amount: dollars(35_000) }),
+      work('2025-02-01', dollars(70_000)),
+      work('2025-04-15', dollars(50_000)),
+      work('2025-07-01', dollars(45_000)),
+      work('2025-10-20', dollars(35_000)),
     ];
     const certificates = [cert({ wcEffective: '2025-01-01', wcExpiration: '2025-04-30' })];
 
-    const result = computeExposure(sub(), payments, certificates, POLICY);
+    const result = computeExposure(sub(), payments, certificates, policy(), PROFILE);
 
     expect(result.paidTotal).toBe(dollars(200_000));
     expect(result.coveredTotal).toBe(dollars(120_000));
@@ -79,15 +34,13 @@ describe('partial coverage', () => {
     expect(result.zeroReason).toBeNull();
   });
 
-  it('flags a certificate that ends before the term while the sub is still being paid', () => {
+  it('flags a certificate that ends before the term while work continues', () => {
     const result = computeExposure(
       sub(),
-      [
-        payment({ paidOn: '2025-02-01', amount: dollars(10_000) }),
-        payment({ paidOn: '2025-08-01', amount: dollars(10_000) }),
-      ],
+      [work('2025-02-01', dollars(10_000)), work('2025-08-01', dollars(10_000))],
       [cert({ wcEffective: '2025-01-01', wcExpiration: '2025-04-30' })],
-      POLICY,
+      policy(),
+      PROFILE,
     );
     expect(result.flags.map((f) => f.flag)).toContain('CERT_EXPIRES_MID_TERM');
   });
@@ -95,49 +48,69 @@ describe('partial coverage', () => {
 
 describe('overlapping certificates', () => {
   it('merges overlapping windows instead of double-counting the overlap', () => {
-    const merged = mergeOverlappingWindows([
-      { from: '2025-01-01', to: '2025-06-30', certificateIds: ['a'] },
-      { from: '2025-05-01', to: '2025-12-31', certificateIds: ['b'] },
-    ]);
-    expect(merged).toEqual([
-      { from: '2025-01-01', to: '2025-12-31', certificateIds: ['a', 'b'] },
-    ]);
+    expect(
+      mergeOverlappingWindows([
+        { from: '2025-01-01', to: '2025-06-30', certificateIds: ['a'] },
+        { from: '2025-05-01', to: '2025-12-31', certificateIds: ['b'] },
+      ]),
+    ).toEqual([{ from: '2025-01-01', to: '2025-12-31', certificateIds: ['a', 'b'] }]);
   });
 
   it('treats a same-day renewal as continuous coverage', () => {
-    const merged = mergeOverlappingWindows([
-      { from: '2025-01-01', to: '2025-06-30', certificateIds: ['a'] },
-      { from: '2025-07-01', to: '2025-12-31', certificateIds: ['b'] },
-    ]);
-    expect(merged).toHaveLength(1);
+    expect(
+      mergeOverlappingWindows([
+        { from: '2025-01-01', to: '2025-06-30', certificateIds: ['a'] },
+        { from: '2025-07-01', to: '2025-12-31', certificateIds: ['b'] },
+      ]),
+    ).toHaveLength(1);
   });
 
   it('keeps a real gap between terms as two windows', () => {
-    const merged = mergeOverlappingWindows([
-      { from: '2025-01-01', to: '2025-06-30', certificateIds: ['a'] },
-      { from: '2025-07-03', to: '2025-12-31', certificateIds: ['b'] },
-    ]);
-    expect(merged).toHaveLength(2);
+    expect(
+      mergeOverlappingWindows([
+        { from: '2025-01-01', to: '2025-06-30', certificateIds: ['a'] },
+        { from: '2025-07-03', to: '2025-12-31', certificateIds: ['b'] },
+      ]),
+    ).toHaveLength(2);
   });
 
   it('covers every payment once when two certificates overlap', () => {
     const result = computeExposure(
       sub(),
       [
-        payment({ paidOn: '2025-03-01', amount: dollars(50_000) }),
-        payment({ paidOn: '2025-05-15', amount: dollars(50_000) }),
-        payment({ paidOn: '2025-11-01', amount: dollars(50_000) }),
+        work('2025-03-01', dollars(50_000)),
+        work('2025-05-15', dollars(50_000)),
+        work('2025-11-01', dollars(50_000)),
       ],
       [
         cert({ id: 'c1', wcEffective: '2025-01-01', wcExpiration: '2025-06-30' }),
         cert({ id: 'c2', wcEffective: '2025-05-01', wcExpiration: '2025-12-31' }),
       ],
-      POLICY,
+      policy(),
+      PROFILE,
     );
     expect(result.coverageWindows).toHaveLength(1);
     expect(result.uncoveredTotal).toBe(0);
     expect(result.addedPremium).toBe(0);
     expect(result.zeroReason).toBe('covered');
+  });
+
+  it('counts a day covered by two certificates once when prorating', () => {
+    // Two overlapping certificates cover 1 Jan – 31 Mar between them; work runs through
+    // April, so 90 of 120 days are covered, not 180 of 120.
+    const result = computeExposure(
+      sub(),
+      [payment({ workFrom: '2025-01-01', workTo: '2025-04-30', paidOn: '2025-05-15', amount: dollars(120_000) })],
+      [
+        cert({ id: 'c1', wcEffective: '2025-01-01', wcExpiration: '2025-02-28' }),
+        cert({ id: 'c2', wcEffective: '2025-02-01', wcExpiration: '2025-03-31' }),
+      ],
+      policy(),
+      { ...PROFILE, coveragePeriod: { ...PROFILE.coveragePeriod, partialOverlap: 'prorate_by_covered_days' } },
+    );
+    expect(result.assessments[0]?.coveredDays).toBe(90);
+    expect(result.assessments[0]?.totalDays).toBe(120);
+    expect(result.coveredTotal).toBe(dollars(90_000));
   });
 });
 
@@ -146,15 +119,14 @@ describe('material credit', () => {
     const result = computeExposure(
       sub(),
       [
-        payment({
-          paidOn: '2025-03-01',
-          amount: dollars(100_000),
+        work('2025-03-01', dollars(100_000), {
           materialAmount: dollars(40_000),
           materialEvidence: 'original_invoice',
         }),
       ],
       [cert()],
-      POLICY,
+      policy(),
+      PROFILE,
     );
     expect(result.materialClaimed).toBe(0);
     expect(result.materialAllowed).toBe(0);
@@ -162,43 +134,40 @@ describe('material credit', () => {
     expect(result.zeroReason).toBe('covered');
   });
 
-  it('allows no deduction without an original invoice', () => {
+  it('allows no deduction for evidence the profile does not accept', () => {
     const result = computeExposure(
       sub(),
       [
-        payment({
-          paidOn: '2025-03-01',
-          amount: dollars(100_000),
+        work('2025-03-01', dollars(100_000), {
           materialAmount: dollars(40_000),
           materialEvidence: 'contract_schedule',
         }),
       ],
       [],
-      POLICY,
+      policy(),
+      PROFILE,
     );
     expect(result.materialClaimed).toBe(0);
     expect(result.addedPayroll).toBe(dollars(100_000));
   });
 
-  it('caps the deduction at half of the uncovered total and reports both figures', () => {
+  it('caps the deduction and reports both figures', () => {
     const result = computeExposure(
       sub(),
       [
-        payment({
-          paidOn: '2025-03-01',
-          amount: dollars(100_000),
+        work('2025-03-01', dollars(100_000), {
           materialAmount: dollars(90_000),
           materialEvidence: 'original_invoice',
         }),
       ],
       [],
-      POLICY,
+      policy(),
+      PROFILE,
     );
     expect(result.materialClaimed).toBe(dollars(90_000));
     expect(result.materialAllowed).toBe(dollars(50_000));
     expect(result.addedPayroll).toBe(dollars(50_000));
-    const flag = result.flags.find((f) => f.flag === 'MATERIAL_CAP_BINDING');
-    expect(flag?.figures).toEqual({
+    expect(result.flags.find((f) => f.flag === 'MATERIAL_CAP_BINDING')?.figures).toEqual({
       claimed: dollars(90_000),
       allowed: dollars(50_000),
       disallowed: dollars(40_000),
@@ -209,24 +178,47 @@ describe('material credit', () => {
     const result = computeExposure(
       sub(),
       [
-        payment({
-          paidOn: '2025-03-01',
-          amount: dollars(10_000),
+        work('2025-03-01', dollars(10_000), {
           materialAmount: dollars(25_000),
           materialEvidence: 'original_invoice',
         }),
       ],
       [],
-      POLICY,
+      policy(),
+      PROFILE,
     );
     expect(result.materialClaimed).toBe(dollars(10_000));
     expect(result.materialAllowed).toBe(dollars(5_000));
+  });
+
+  it('pro-rates material on a payment that is only partly uncovered', () => {
+    const result = computeExposure(
+      sub(),
+      [
+        payment({
+          workFrom: '2025-01-01',
+          workTo: '2025-04-30',
+          paidOn: '2025-05-15',
+          amount: dollars(120_000),
+          materialAmount: dollars(60_000),
+          materialEvidence: 'original_invoice',
+        }),
+      ],
+      [cert({ wcEffective: '2025-01-01', wcExpiration: '2025-03-31' })],
+      policy(),
+      { ...PROFILE, coveragePeriod: { ...PROFILE.coveragePeriod, partialOverlap: 'prorate_by_covered_days' } },
+    );
+    // 30 of 120 days uncovered → $30,000 uncovered, and a quarter of the claimed material.
+    expect(result.uncoveredTotal).toBe(dollars(30_000));
+    expect(result.materialClaimed).toBe(dollars(15_000));
+    expect(result.materialAllowed).toBe(dollars(15_000));
+    expect(result.addedPayroll).toBe(dollars(15_000));
   });
 });
 
 describe('degenerate inputs', () => {
   it('does not crash or divide by zero with no payments and a certificate on file', () => {
-    const result = computeExposure(sub(), [], [cert()], POLICY);
+    const result = computeExposure(sub(), [], [cert()], policy(), PROFILE);
     expect(result.paidTotal).toBe(0);
     expect(result.addedPayroll).toBe(0);
     expect(result.addedPremium).toBe(0);
@@ -236,7 +228,7 @@ describe('degenerate inputs', () => {
   });
 
   it('does not crash with no payments and no documents at all', () => {
-    const result = computeExposure(sub(), [], [], POLICY);
+    const result = computeExposure(sub(), [], [], policy(), PROFILE);
     expect(result.addedPremium).toBe(0);
     expect(result.coverageWindows).toEqual([]);
   });
@@ -244,9 +236,10 @@ describe('degenerate inputs', () => {
   it('produces no coverage window from a certificate with an empty WC section', () => {
     const result = computeExposure(
       sub(),
-      [payment({ paidOn: '2025-03-01', amount: dollars(20_000) })],
+      [work('2025-03-01', dollars(20_000))],
       [cert({ wcPresent: false, wcEffective: null, wcExpiration: null })],
-      POLICY,
+      policy(),
+      PROFILE,
     );
     expect(result.coverageWindows).toEqual([]);
     expect(result.addedPayroll).toBe(dollars(20_000));
@@ -256,9 +249,10 @@ describe('degenerate inputs', () => {
   it('produces no coverage window from a WC section with a missing date', () => {
     const result = computeExposure(
       sub(),
-      [payment({ paidOn: '2025-03-01', amount: dollars(20_000) })],
+      [work('2025-03-01', dollars(20_000))],
       [cert({ wcExpiration: null })],
-      POLICY,
+      policy(),
+      PROFILE,
     );
     expect(result.coverageWindows).toEqual([]);
     expect(result.addedPayroll).toBe(dollars(20_000));
@@ -270,13 +264,14 @@ describe('coverage window boundaries', () => {
     const result = computeExposure(
       sub(),
       [
-        payment({ paidOn: '2025-03-01', amount: dollars(10_000) }), // exact start
-        payment({ paidOn: '2025-06-30', amount: dollars(10_000) }), // exact end
-        payment({ paidOn: '2025-02-28', amount: dollars(10_000) }), // day before
-        payment({ paidOn: '2025-07-01', amount: dollars(10_000) }), // day after
+        work('2025-03-01', dollars(10_000)), // exact start
+        work('2025-06-30', dollars(10_000)), // exact end
+        work('2025-02-28', dollars(10_000)), // day before
+        work('2025-07-01', dollars(10_000)), // day after
       ],
       [cert({ wcEffective: '2025-03-01', wcExpiration: '2025-06-30' })],
-      POLICY,
+      policy(),
+      PROFILE,
     );
     expect(result.coveredTotal).toBe(dollars(20_000));
     expect(result.uncoveredTotal).toBe(dollars(20_000));
@@ -286,13 +281,14 @@ describe('coverage window boundaries', () => {
     const result = computeExposure(
       sub(),
       [
-        payment({ paidOn: '2024-12-31', amount: dollars(50_000) }),
-        payment({ paidOn: '2025-01-01', amount: dollars(10_000) }),
-        payment({ paidOn: '2025-12-31', amount: dollars(10_000) }),
-        payment({ paidOn: '2026-01-01', amount: dollars(50_000) }),
+        work('2024-12-31', dollars(50_000)),
+        work('2025-01-01', dollars(10_000)),
+        work('2025-12-31', dollars(10_000)),
+        work('2026-01-01', dollars(50_000)),
       ],
       [],
-      POLICY,
+      policy(),
+      PROFILE,
     );
     expect(result.paidTotal).toBe(dollars(20_000));
   });
@@ -302,27 +298,27 @@ describe('counterfactuals', () => {
   it('values a certificate at the whole exposure and a split invoice at half of it', () => {
     const result = computeExposure(
       sub(),
-      [payment({ paidOn: '2025-03-01', amount: dollars(100_000) })],
+      [work('2025-03-01', dollars(100_000))],
       [],
-      POLICY,
+      policy(),
+      PROFILE,
     );
     expect(result.ifCertificateObtained).toBe(result.addedPremium);
-    expect(result.ifSplitInvoiceObtained).toBe(Math.round(result.addedPremium / 2));
+    expect(result.ifSplitInvoiceObtained).toBe(dollars(5_000));
   });
 
   it('values a split invoice at zero once the cap is already exhausted', () => {
     const result = computeExposure(
       sub(),
       [
-        payment({
-          paidOn: '2025-03-01',
-          amount: dollars(100_000),
+        work('2025-03-01', dollars(100_000), {
           materialAmount: dollars(50_000),
           materialEvidence: 'original_invoice',
         }),
       ],
       [],
-      POLICY,
+      policy(),
+      PROFILE,
     );
     expect(result.ifSplitInvoiceObtained).toBe(0);
     expect(result.ifCertificateObtained).toBe(result.addedPremium);
@@ -330,27 +326,29 @@ describe('counterfactuals', () => {
 });
 
 describe('rating', () => {
-  it('uses a class code override in place of the governing rate', () => {
+  it('uses the recorded class for the subcontractor’s trade', () => {
     const result = computeExposure(
       sub({ classCodeOverride: { classCode: '5551', rate: 315_000 } }),
-      [payment({ paidOn: '2025-03-01', amount: dollars(100_000) })],
+      [work('2025-03-01', dollars(100_000))],
       [],
-      POLICY,
+      policy(),
+      PROFILE,
     );
-    expect(result.rateSource).toBe('class_code_override');
-    expect(result.classCode).toBe('5551');
-    // 100,000 / 100 * 31.50 * 1.05 = 33,075.00
-    expect(result.addedPremium).toBe(dollars(33_075));
+    expect(result.rate.provenance).toBe('subcontractor_class');
+    expect(result.rate.classCode).toBe('5551');
+    // 100,000 / 100 × 31.50 × 1.000
+    expect(result.addedPremium).toBe(dollars(31_500));
   });
 
   it('rounds to the cent exactly once, at the end', () => {
     const result = computeExposure(
-      sub(),
-      [payment({ paidOn: '2025-03-01', amount: dollars(143_000) })],
+      sub({ classCodeOverride: { classCode: '5645', rate: 124_000 } }),
+      [work('2025-03-01', dollars(143_000))],
       [],
-      POLICY,
+      policy({ experienceMod: 1_050 }),
+      PROFILE,
     );
-    // 143,000 / 100 * 12.40 * 1.05 = 18,618.60
+    // 143,000 / 100 × 12.40 × 1.05 = 18,618.60
     expect(result.addedPremium).toBe(1_861_860);
   });
 });
@@ -359,9 +357,10 @@ describe('triage', () => {
   it('prices an untriaged vendor as a subcontractor and flags it above the threshold', () => {
     const result = computeExposure(
       sub({ triage: 'undecided' }),
-      [payment({ paidOn: '2025-03-01', amount: dollars(60_000) })],
+      [work('2025-03-01', dollars(60_000))],
       [],
-      POLICY,
+      policy(),
+      PROFILE,
     );
     expect(result.addedPayroll).toBe(dollars(60_000));
     expect(result.flags.map((f) => f.flag)).toContain('LARGE_UNMATCHED_VENDOR');
@@ -370,39 +369,25 @@ describe('triage', () => {
   it('removes a vendor the contractor triaged as a material supplier', () => {
     const result = computeExposure(
       sub({ triage: 'supplier' }),
-      [payment({ paidOn: '2025-03-01', amount: dollars(60_000) })],
+      [work('2025-03-01', dollars(60_000))],
       [],
-      POLICY,
+      policy(),
+      PROFILE,
     );
     expect(result.paidTotal).toBe(dollars(60_000));
     expect(result.addedPremium).toBe(0);
     expect(result.zeroReason).toBe('not_a_subcontractor');
   });
-});
 
-describe('policy-level surcharge', () => {
-  const surchargePolicy: PolicyInput = { ...POLICY, noncomplianceSurchargePct: 50_000 }; // 5%
-
-  it('applies only when at least one sub carries exposure', () => {
-    const withExposure = computePortfolioExposure(
-      [sub()],
-      [payment({ paidOn: '2025-03-01', amount: dollars(100_000) })],
+  it('takes the flag threshold from the profile', () => {
+    const result = computeExposure(
+      sub({ triage: 'undecided' }),
+      [work('2025-03-01', dollars(6_000))],
       [],
-      surchargePolicy,
+      policy(),
+      { ...PROFILE, largeUntriagedVendorThreshold: dollars(5_000) },
     );
-    expect(withExposure.surcharge).toBe(dollars(9_000)); // 5% of 180,000
-    expect(withExposure.totalExposure).toBe(
-      withExposure.addedPremiumBeforeSurcharge + dollars(9_000),
-    );
-
-    const withoutExposure = computePortfolioExposure(
-      [sub()],
-      [payment({ paidOn: '2025-03-01', amount: dollars(100_000) })],
-      [cert()],
-      surchargePolicy,
-    );
-    expect(withoutExposure.surcharge).toBe(0);
-    expect(withoutExposure.totalExposure).toBe(0);
+    expect(result.flags.map((f) => f.flag)).toContain('LARGE_UNMATCHED_VENDOR');
   });
 });
 
@@ -410,12 +395,42 @@ describe('officer exclusion', () => {
   it('flags a certificate that shows WC but notes an officer exclusion', () => {
     const result = computeExposure(
       sub(),
-      [payment({ paidOn: '2025-03-01', amount: dollars(20_000) })],
+      [work('2025-03-01', dollars(20_000))],
       [cert({ wcOfficerExclusionNoted: true })],
-      POLICY,
+      policy(),
+      PROFILE,
     );
     expect(result.flags.map((f) => f.flag)).toContain('OFFICER_EXCLUSION_NOTED');
     // The flag annotates; it never moves a dollar.
     expect(result.addedPremium).toBe(0);
+  });
+});
+
+describe('portfolio roll-up', () => {
+  it('ranks by premium and keeps the ledger total whole', () => {
+    const portfolio = computePortfolioExposure({
+      subs: [
+        sub({ id: 'a', name: 'Alpha' }),
+        sub({ id: 'b', name: 'Bravo' }),
+        sub({ id: 'c', name: 'Charlie', triage: 'supplier' }),
+      ],
+      payments: [
+        payment({ ...work('2025-03-01', dollars(30_000)), subcontractorId: 'a' }),
+        payment({ ...work('2025-03-01', dollars(90_000)), subcontractorId: 'b' }),
+        payment({ ...work('2025-03-01', dollars(50_000)), subcontractorId: 'c' }),
+      ],
+      certificates: [],
+      policy: policy(),
+      computedAt: '2026-01-01T00:00:00.000Z',
+      catalogue: TEST_CATALOGUE,
+    });
+
+    expect(portfolio.subs.map((entry) => entry.subcontractorName)).toEqual([
+      'Bravo',
+      'Alpha',
+      'Charlie',
+    ]);
+    expect(portfolio.addedPayroll).toBe(dollars(120_000));
+    expect(portfolio.addedPremiumBeforeSurcharge).toBe(dollars(12_000));
   });
 });

@@ -11,13 +11,13 @@
 import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { RULESET } from '@/lib/exposure/ruleset';
 import { computePortfolioExposure } from '@/lib/exposure/compute';
 import { buildImportPreview, sniffTable } from '@/lib/ingest/csv';
 import { normalizeName } from '@/lib/matching/normalize';
 import { proposeChaseItems } from '@/lib/chase/rank';
 import { getStore } from '@/lib/db';
 import {
+  workPeriodSchema,
   chaseDraftSchema,
   chaseResolveSchema,
   importRequestSchema,
@@ -67,11 +67,19 @@ export async function savePolicyAction(
     policyNumber: String(formData.get('policyNumber') ?? ''),
     termStart: String(formData.get('termStart') ?? ''),
     termEnd: String(formData.get('termEnd') ?? ''),
+    jurisdiction: String(formData.get('jurisdiction') ?? ''),
+    ratingBureau: String(formData.get('ratingBureau') ?? ''),
     governingClassCode: String(formData.get('governingClassCode') ?? ''),
     governingRate: String(formData.get('governingRate') ?? ''),
     experienceMod: String(formData.get('experienceMod') ?? ''),
     estimatedAnnualPremium: String(formData.get('estimatedAnnualPremium') ?? ''),
-    noncomplianceSurchargePct: String(formData.get('noncomplianceSurchargePct') ?? '0'),
+    auditEndorsementOnPolicy: formData.get('auditEndorsementOnPolicy') === 'on',
+    auditRecordsFurnished: formData.get('auditRecordsFurnished') !== 'off',
+    auditPermitted: formData.get('auditPermitted') !== 'off',
+    auditEstimatedIssued: formData.get('auditEstimatedIssued') === 'on',
+    carrierConfiguredNoncompliancePct: String(
+      formData.get('carrierConfiguredNoncompliancePct') ?? '0',
+    ),
   });
   if (!parsed.success) return fail(parsed.error);
 
@@ -88,9 +96,21 @@ export async function savePolicyAction(
     termEnd: parsed.data.termEnd,
     experienceMod: parsed.data.experienceMod,
     estimatedAnnualPremium: parsed.data.estimatedAnnualPremium,
-    noncomplianceSurchargePct: parsed.data.noncomplianceSurchargePct,
     governingClassCode: parsed.data.governingClassCode,
     governingRate: parsed.data.governingRate,
+    jurisdiction: parsed.data.jurisdiction,
+    ratingBureau: parsed.data.ratingBureau?.trim() ? parsed.data.ratingBureau.trim() : null,
+    // Terms are not pinned to a ruleset version at setup; a saved figure records the
+    // version it used, and pinning is what reproduces it later.
+    rulesetId: null,
+    rulesetVersion: null,
+    auditCompliance: {
+      endorsementOnPolicy: parsed.data.auditEndorsementOnPolicy,
+      recordsFurnished: parsed.data.auditRecordsFurnished,
+      auditPermitted: parsed.data.auditPermitted,
+      estimatedAuditIssued: parsed.data.auditEstimatedIssued,
+      carrierConfiguredPct: parsed.data.carrierConfiguredNoncompliancePct,
+    },
   });
 
   refreshAll();
@@ -174,6 +194,8 @@ export async function importLedgerAction(input: unknown): Promise<ActionResult> 
             {
               subcontractorId,
               paidOn: payment.paidOn,
+              workFrom: payment.workFrom,
+              workTo: payment.workTo,
               amount: payment.amount,
               sourceRef: payment.sourceRef,
               memo: payment.memo,
@@ -185,9 +207,13 @@ export async function importLedgerAction(input: unknown): Promise<ActionResult> 
   );
 
   refreshAll();
+  const proxied = preview.payments.length - preview.withWorkPeriod;
   return {
     ok: true,
-    message: `Imported ${preview.payments.length} payments across ${preview.vendors.length} vendors.`,
+    message:
+      proxied === 0
+        ? `Imported ${preview.payments.length} payments across ${preview.vendors.length} vendors, all with work periods.`
+        : `Imported ${preview.payments.length} payments across ${preview.vendors.length} vendors. ${proxied} have no work dates, so coverage will be tested against the payment date and labelled a proxy.`,
   };
 }
 
@@ -216,12 +242,44 @@ export async function setTriageAction(input: unknown): Promise<ActionResult> {
 export async function patchSubcontractorAction(input: unknown): Promise<ActionResult> {
   const parsed = subcontractorPatchSchema.safeParse(input);
   if (!parsed.success) return fail(parsed.error);
-  const { subcontractorId, classCodeRateId, ...patch } = parsed.data;
+  const {
+    subcontractorId,
+    classCodeRateId,
+    priorAuditClassCode,
+    priorAuditRate,
+    ...patch
+  } = parsed.data;
+
+  // The prior-audit rate is the pair or nothing: a rate with no class does not identify
+  // what an auditor actually applied, and a class with no rate cannot rate anything.
+  const priorAudit =
+    priorAuditClassCode === undefined && priorAuditRate === undefined
+      ? undefined
+      : priorAuditClassCode && priorAuditRate !== null && priorAuditRate !== undefined
+        ? { classCode: priorAuditClassCode, rate: priorAuditRate }
+        : null;
+
   const store = await getStore();
   await store.patchSubcontractor(subcontractorId, {
     ...patch,
     ...(classCodeRateId === undefined ? {} : { classCodeRateId }),
+    ...(priorAudit === undefined ? {} : { priorAuditRate: priorAudit }),
   });
+  refreshAll();
+  return ok;
+}
+
+/**
+ * Record when the work behind a payment was performed.
+ *
+ * This is the single highest-value correction a user can make: it replaces a payment-date
+ * proxy with the period an auditor actually cares about.
+ */
+export async function setWorkPeriodAction(input: unknown): Promise<ActionResult> {
+  const parsed = workPeriodSchema.safeParse(input);
+  if (!parsed.success) return fail(parsed.error);
+  const store = await getStore();
+  await store.setPaymentWorkPeriod(parsed.data.paymentId, parsed.data.workFrom, parsed.data.workTo);
   refreshAll();
   return ok;
 }
@@ -280,6 +338,8 @@ export async function saveManualCertificateAction(input: unknown): Promise<Actio
     extractionError: null,
     rawExtraction: null,
     reviewedByUserAt: new Date().toISOString(),
+    evidence: 'entered_by_user',
+    matchMethod: 'manual',
   });
 
   refreshAll();
@@ -307,6 +367,8 @@ export async function reviewCertificateAction(input: unknown): Promise<ActionRes
     glPresent: schema.data.glPresent,
     status: 'matched',
     reviewedByUserAt: new Date().toISOString(),
+    evidence: 'reviewed_by_user',
+    matchMethod: 'manual',
   });
 
   refreshAll();
@@ -319,6 +381,7 @@ export async function matchCertificateAction(input: unknown): Promise<ActionResu
   const store = await getStore();
   await store.matchCertificate(parsed.data.certificateId, parsed.data.subcontractorId, {
     saveAlias: parsed.data.saveAlias,
+    method: 'manual',
   });
   refreshAll();
   return ok;
@@ -343,12 +406,16 @@ export async function refreshChaseListAction(): Promise<ActionResult> {
   const data = await store.loadDataset();
   if (!data.policy) return { ok: false, message: 'Set up a policy term first.' };
 
-  const portfolio = computePortfolioExposure(
-    data.subcontractors,
-    data.payments,
-    data.certificates,
-    data.policy,
-  );
+  const portfolio = computePortfolioExposure({
+    subs: data.subcontractors,
+    payments: data.payments,
+    certificates: data.certificates,
+    policy: data.policy,
+  });
+
+  if (portfolio.status === 'unavailable') {
+    return { ok: false, message: portfolio.unavailable?.message ?? 'No estimate is available.' };
+  }
 
   const producerEmailBySub: Record<string, string | null> = {};
   for (const certificate of data.certificates) {
@@ -375,7 +442,7 @@ export async function refreshChaseListAction(): Promise<ActionResult> {
       resolvedAt: null,
       resolutionNote: null,
       exposureRemoved: null,
-      rulesetVersion: RULESET.version,
+      rulesetVersion: portfolio.provenance.rulesetVersion,
     })),
   );
 
@@ -422,14 +489,19 @@ export async function resolveChaseItemAction(input: unknown): Promise<ActionResu
 
   let exposureRemoved: number | null = null;
   if (parsed.data.status === 'resolved' && data.policy) {
-    const portfolio = computePortfolioExposure(
-      data.subcontractors,
-      data.payments,
-      data.certificates,
-      data.policy,
-    );
+    const portfolio = computePortfolioExposure({
+      subs: data.subcontractors,
+      payments: data.payments,
+      certificates: data.certificates,
+      policy: data.policy,
+    });
     const now = portfolio.subs.find((sub) => sub.subcontractorId === item.subcontractorId);
-    exposureRemoved = Math.max(0, item.exposureAtOpen - (now?.addedPremium ?? 0));
+    // Only claim dollars removed where the current figure is actually a figure. An
+    // estimate that became unavailable did not remove anything.
+    exposureRemoved =
+      portfolio.status === 'estimated' && now?.addedPremium !== null && now !== undefined
+        ? Math.max(0, item.exposureAtOpen - now.addedPremium)
+        : null;
   }
 
   await store.updateChaseItem(parsed.data.chaseItemId, {

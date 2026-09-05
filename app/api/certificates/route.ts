@@ -62,6 +62,8 @@ export async function POST(request: Request) {
       extractionError: null,
       rawExtraction: null,
       reviewedByUserAt: null,
+      evidence: 'model_extracted',
+      matchMethod: 'unmatched',
     });
 
     created.push({ id: record.id, filename: file.name });
@@ -133,6 +135,11 @@ async function runExtraction(
 
   const best = ranked[0];
   if (best && best.score >= AUTO_MATCH_THRESHOLD) {
-    await store.matchCertificate(certificateId, best.subcontractorId, { saveAlias: true });
+    // Record how the match was made. A trigram auto-match is a machine judgement, and
+    // every figure that depends on it says so until a person confirms it.
+    await store.matchCertificate(certificateId, best.subcontractorId, {
+      saveAlias: true,
+      method: best.score === 1 ? 'alias' : 'auto_trigram',
+    });
   }
 }

@@ -111,7 +111,11 @@ export interface ExposureSnapshotRecord {
   readonly id: string;
   readonly orgId: string;
   readonly policyId: string;
+  readonly rulesetId: string;
   readonly rulesetVersion: string;
+  readonly jurisdiction: string | null;
+  readonly ratingBureau: string | null;
+  readonly confidenceLevel: string | null;
   readonly totalExposure: Cents;
   readonly addedPayroll: Cents;
   readonly surcharge: Cents;

@@ -48,6 +48,12 @@ export interface ParsedPayment {
   readonly vendorName: string;
   readonly normalizedVendorName: string;
   readonly paidOn: IsoDate;
+  /**
+   * The period the work was performed, when the export carries it. Coverage is tested
+   * against this; where it is null the payment date is used as a labelled proxy.
+   */
+  readonly workFrom: IsoDate | null;
+  readonly workTo: IsoDate | null;
   readonly amount: Cents;
   readonly sourceRef: string | null;
   readonly memo: string | null;
@@ -69,6 +75,8 @@ export interface ParsedVendor {
 
 export interface ImportPreview {
   readonly payments: readonly ParsedPayment[];
+  /** How many imported rows carry a usable work period. The rest will be proxied. */
+  readonly withWorkPeriod: number;
   readonly vendors: readonly ParsedVendor[];
   readonly excluded: readonly ExcludedRow[];
   readonly excludedCounts: Readonly<Record<ExclusionReason, number>>;
@@ -145,6 +153,8 @@ export function suggestMapping(
     amount: pick(headers, preset, 'amount'),
     sourceRef: pick(headers, preset, 'sourceRef'),
     memo: pick(headers, preset, 'memo'),
+    workFrom: pick(headers, preset, 'workFrom'),
+    workTo: pick(headers, preset, 'workTo'),
   };
 }
 
@@ -186,6 +196,8 @@ export function buildImportPreview(input: {
   const amountIndex = index(mapping.amount);
   const refIndex = index(mapping.sourceRef);
   const memoIndex = index(mapping.memo);
+  const workFromIndex = index(mapping.workFrom);
+  const workToIndex = index(mapping.workTo);
 
   const payments: ParsedPayment[] = [];
   const excluded: ExcludedRow[] = [];
@@ -247,11 +259,19 @@ export function buildImportPreview(input: {
       return;
     }
 
+    // A work period needs both ends and has to be ordered. A half-populated column is
+    // worse than none: it would look like a work period and be tested like one.
+    const workFrom = parseLedgerDate(cell(row, workFromIndex));
+    const workTo = parseLedgerDate(cell(row, workToIndex));
+    const usableWorkPeriod = workFrom !== null && workTo !== null && workFrom <= workTo;
+
     payments.push({
       rowNumber,
       vendorName,
       normalizedVendorName: normalizeName(vendorName),
       paidOn,
+      workFrom: usableWorkPeriod ? workFrom : null,
+      workTo: usableWorkPeriod ? workTo : null,
       amount,
       sourceRef: nullable(cell(row, refIndex)),
       memo: nullable(cell(row, memoIndex)),
@@ -299,6 +319,7 @@ export function buildImportPreview(input: {
 
   return {
     payments,
+    withWorkPeriod: payments.filter((payment) => payment.workFrom !== null).length,
     vendors,
     excluded,
     excludedCounts,

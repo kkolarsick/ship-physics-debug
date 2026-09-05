@@ -10,14 +10,19 @@ dollar estimate and the evidence behind it.
 
 ## Status
 
-**Pre-production prototype.** The application, ingestion, document workflow, calculation
-engine, exports, and test harness are built. The current calculation rules are modeled
-assumptions and are **not yet jurisdiction-complete**. Do not use the current ruleset as a
-live customer billing estimate across states until jurisdiction-specific audit profiles are
-implemented and validated against the applicable rating bureau/carrier rules.
+**Pre-production.** Audit treatment is now selected through a versioned jurisdiction rules
+profile rather than a single universal ruleset, and the engine fails closed: a policy whose
+jurisdiction has no configured profile produces **no dollar figure at all**, not a figure
+computed under someone else's rules.
 
-The seeded demo is deterministic and currently produces **$405,700** of added payroll and
-**$52,822** of estimated additional premium.
+Both shipped profiles are `draft` — nobody has checked them line by line against the
+governing bureau manual — and every figure they produce says so, in the UI and in both
+exports. Verifying a profile is a data change (`status`, `verifiedBy`, `verifiedAt` in
+`lib/rules/profiles/`), not a code change. Do not present a `draft` profile's output to a
+carrier as a transcription of the bureau's rule.
+
+The seeded demo is deterministic and produces **$405,700** of added payroll and **$52,822**
+of estimated additional premium under the NCCI profile.
 
 ## Stack
 
@@ -53,7 +58,8 @@ npm run test:e2e    # Playwright happy path
 ## Core architecture
 
 ```text
-lib/exposure/     pure exposure/rating engine
+lib/rules/        jurisdiction rules profiles and fail-closed resolution
+lib/exposure/     pure exposure/rating engine, driven by a rules profile
 lib/money.ts      integer-cent and scaled-integer arithmetic
 lib/dates.ts      calendar-date handling
 lib/ingest/       CSV import and presets
@@ -66,19 +72,65 @@ supabase/         schema, RLS, storage policies, migrations
 app/              product UI and API routes
 ```
 
+### The rules layer
+
+A policy names a `jurisdiction` and optionally a `ratingBureau`; `resolveRulesProfile()`
+turns that into a versioned `RulesProfile`, or into a stated failure. There is deliberately
+no catch-all profile and no national default — an unrecognised jurisdiction, a jurisdiction
+whose rules have not been transcribed, a bureau that contradicts the jurisdiction, or a
+pinned ruleset version that is not in the build all resolve to *estimate unavailable*.
+
+A profile is data, not code. It decides:
+
+| Rule | What it settles |
+|---|---|
+| `uninsuredSubcontractor` | Whether the full uncovered cost is payroll, or a deemed labor share of it, or nothing this build models |
+| `laborMaterial` | Whether a labor/material split is permitted at all, which documents support one, and the cap |
+| `classification` | Whether payroll is rated at the subcontractor's trade class or the governing class, and whether a governing-rate proxy is allowed |
+| `specialCategories` | Equipment with an operator, owner-operators, sole proprietors, labor-only, licensed professionals |
+| `coveragePeriod` | Whether the payment date may stand in for the work period, and how a straddling period is split |
+| `auditNoncompliance` | Which conditions can trigger a charge, and how the charge is computed |
+
+Adding a jurisdiction is a new file in `lib/rules/profiles/`. Two profiles in
+`tests/fixtures/profiles.ts` disagree on every one of those axes, and the suite asserts they
+produce materially different payroll and premium from identical inputs — the abstraction is
+load-bearing, not decorative.
+
 ### Calculation engine
 
-`computeExposure()` currently:
+`computeExposure(sub, payments, certificates, policy, profile)`:
 
-1. Builds workers' compensation coverage windows from certificates on file.
-2. Splits in-term subcontractor payments into covered and uncovered amounts.
-3. Applies the configured material-treatment assumption where supported by evidence.
-4. Rates the resulting payroll basis at the configured class-code rate and experience mod.
-5. Calculates counterfactual dollar values for remediation actions.
+1. Builds coverage windows from the certificates on file.
+2. Tests each payment against **the period the work was performed**. Where a payment carries
+   no work dates, the payment date stands in only if the profile permits it, and the result
+   is labelled a proxy in the UI, the exports, and the confidence model. A profile that
+   refuses the proxy yields *estimate unavailable* rather than a guess from the check date.
+3. Derives payroll under the profile's uninsured-subcontractor and labor/material rules,
+   including deemed labor shares and special categories.
+4. Selects a rate **with provenance** — the subcontractor's own class, a rate an auditor
+   actually applied on a prior audit, a rules-derived governing class, a flagged
+   governing-rate proxy, or none. Where there is none, it reports payroll and produces no
+   premium figure at all.
+5. Assesses the audit noncompliance charge from the audit conditions on the policy, never
+   from the presence of uninsured subcontract cost.
+6. Values each remediation action, and builds a confidence and provenance record.
 
-Money is integer cents; rates and modifiers are scaled integers. Calculations are versioned
-with a ruleset identifier and every displayed/exported number is intended to be traceable to
-its inputs.
+Money is integer cents; rates and modifiers are scaled integers. Every saved figure carries
+the ruleset id and version that produced it, and re-resolving that pair reproduces the same
+profile — so a figure produced in March still computes to the same number in November after
+the live profile has moved on.
+
+### Estimate confidence
+
+Deterministic arithmetic and uncertain inputs are kept apart. Every estimate carries an
+`EstimateConfidence`: one factor per input class — rules profile, rules review, work period,
+rate provenance, certificate reading, certificate match, category, triage, manual overrides
+— each with what is *known* and, separately, what was *assumed*. The overall level is the
+weakest factor, because one weak input is enough.
+
+Every premium figure is therefore explainable as: inputs (the per-payment assessments),
+assumptions (the confidence factors), ruleset (id, version, status), confidence flags, and
+the documents behind it (certificate and payment ids on the provenance record).
 
 ## Compliance posture
 
@@ -97,6 +149,31 @@ Migration `0003_secure_org_bootstrap.sql` closes the original workspace-bootstra
 clients can no longer self-insert arbitrary `org_members` rows. New organizations and owner
 membership are created atomically through an authenticated `SECURITY DEFINER` function.
 
+`0005_membership_administration.sql` supplies the path that fix left missing. There is still
+no client-side `INSERT` policy on `org_members`; adding a member goes through
+`invite_org_member()`, which requires the caller to already be an owner of that org, and
+`remove_org_member()` refuses to remove an org's last owner. Renaming an org is
+owner-only. Saved figures and the audit trail are append-only in the schema itself, so no
+later migration or ruleset change can rewrite a figure the user was already shown.
+
+This is verified against a real Postgres rather than reasoned about:
+
+```bash
+npm run test:db     # applies every migration from zero, then attempts cross-tenant access
+```
+
+`supabase/test/tenant-isolation.test.sql` creates two accounts and two organizations and
+tries every route from one to the other: self-inserting membership, escalating a role,
+reading and tampering with certificates, reaching stored documents, using the matching RPC
+as a side channel, rewriting a saved figure, and rewriting the audit trail. Every assertion
+raises on failure. The suite has been checked against a deliberately reintroduced hole and
+fails when the old self-insert policy is put back.
+
+`tests/security/policies.test.ts` is the cheap tripwire that runs in `npm run check` without
+a database: it walks the migrations in order and fails if the dangerous policies reappear,
+if a `SECURITY DEFINER` function loses its pinned `search_path`, or if a service-role key
+ever shows up in application code.
+
 ## Supabase
 
 Copy `.env.example` to `.env.local`, configure the Supabase URL/anon key, and apply all
@@ -109,9 +186,12 @@ supabase db push
 The migration set is:
 
 ```text
-0001_init.sql
-0002_storage.sql
-0003_secure_org_bootstrap.sql
+0001_init.sql                             schema, RLS, append-only audit trail
+0002_storage.sql                          private org-scoped buckets
+0003_secure_org_bootstrap.sql             closes the self-join hole
+0004_rules_profiles_and_provenance.sql    jurisdiction, work periods, rate provenance,
+                                          audit-compliance inputs, snapshot immutability
+0005_membership_administration.sql        owner-gated membership changes
 ```
 
 With Supabase unset, the application uses the local JSON demo store.
@@ -141,27 +221,49 @@ Optional integrations:
 
 ## Production gates
 
-The next work should be correctness and control work, not feature expansion.
+Gates 1–6 below are closed. The engine no longer assumes a universal ruleset, no longer
+treats the payment date as the work date, no longer conflates audit noncompliance with
+uninsured subcontract cost, and no longer presents a governing-rate proxy as a known rate.
+Tenant isolation is tested against a live database.
 
-1. **Jurisdiction profiles.** Add policy jurisdiction/rating-bureau identity and versioned
-   rule profiles. The current single ruleset must not be treated as universal.
-2. **Exposure period semantics.** Coverage should ultimately be tested against the period
-   work was performed (or another defensible audit exposure basis), not silently assume the
-   payment date is the work date.
-3. **Subcontract type/payroll basis.** Model actual subcontractor payroll when available and
-   jurisdiction-specific treatment for labor/material, labor-only, piecework, equipment,
-   and other categories.
-4. **Audit noncompliance charges.** Separate ordinary subcontractor exposure from any formal
-   audit-noncompliance charge and model the actual endorsement/trigger conditions.
-5. **Class-code treatment.** Make the applied classification/rate explicit and auditable at
-   the subcontractor level instead of relying on a governing-rate fallback as a production
-   assumption.
-6. **Security regression tests.** Add database/RLS integration tests, including explicit
-   cross-tenant denial tests.
-7. **CI/CD and deployment hardening.** Run typecheck, lint, unit, E2E, migration, and security
-   gates on every change before production deployment.
-8. **Third-party data handling.** Finalize customer disclosures and retention/processing
-   controls for certificate documents sent to the extraction provider.
+| # | Gate | State |
+|---|---|---|
+| 1 | Jurisdiction rules profiles, versioned, fail-closed | Closed — `lib/rules/` |
+| 2 | Labor/material treatment is per-jurisdiction, not a universal 50% | Closed — profile-driven, two divergent profiles under test |
+| 3 | Coverage tested against the work period, proxy disclosed | Closed — `lib/exposure/coverage.ts` |
+| 4 | Audit noncompliance modelled from its own triggers | Closed — `lib/exposure/noncompliance.ts` |
+| 5 | Explicit rate provenance, no silent governing-rate fallback | Closed — `lib/exposure/rating.ts` |
+| 6 | Cross-tenant security tests against a real database | Closed — `npm run test:db` |
+| 7 | CI/CD gates on every change | **Open** |
+| 8 | Third-party data handling disclosures and retention controls | **Open** |
 
-Until those gates are closed, SubLedger should be treated as a strong prototype and audit-
-preparation workflow, not a universal premium determination engine.
+Two things still bound what this build should be used for:
+
+**Both shipped rules profiles are drafts.** `us-ncci-basic-manual` models NCCI-state
+treatment as this product understands it; nobody has checked it against the Basic Manual.
+`us-ca-wcirb` is declared so the product knows California exists, and models nothing — a
+California policy produces no estimate rather than quietly inheriting NCCI treatment.
+Verifying a profile, or populating California, is a data change in `lib/rules/profiles/`.
+
+**Coverage status is still document-derived.** The app reads certificates; it does not
+confirm with any carrier that a policy was in force.
+
+## Where this implementation departs from a naive reading
+
+**There is no universal ruleset constant.** The old `RULESET` is gone. Anything that needs
+treatment takes a `RulesProfile`, and anything that needs to produce a figure has to resolve
+one first.
+
+**A missing rate produces no premium, not a zero and not a proxy.** `addedPremium` is
+`number | null`. Unrated payroll is reported separately on the dashboard, in the workpaper,
+and in the workbook, so it is visible rather than quietly absorbed into a total.
+
+**Confidence is scoped to the figures that exist.** A vendor triaged out as a material
+supplier contributes nothing to the total, so the quality of its class code and work dates
+does not drag the estimate's confidence down. A vendor priced at zero *because its
+certificates cover the work* does count — a misread date there would move the number.
+
+**The material cap is applied against the uncovered total, not everything paid** — under
+profiles whose cap is `share_of_uncovered`. Capping against total paid would let a mostly
+covered subcontractor erase its uncovered slice using materials from payments that were
+already covered. Profiles can specify either basis; the shipped NCCI profile uses the former.

@@ -23,9 +23,11 @@ export default async function ChasePage() {
   const rows: ChaseRow[] = data.chaseItems.map((item) => {
     const sub = data.subcontractors.find((entry) => entry.id === item.subcontractorId);
     const exposure = portfolio.subs.find((entry) => entry.subcontractorId === item.subcontractorId);
-    const payments = data.payments
+    const workDates = data.payments
       .filter((payment) => payment.subcontractorId === item.subcontractorId)
-      .map((payment) => payment.paidOn)
+      .flatMap((payment) =>
+        payment.workFrom && payment.workTo ? [payment.workFrom, payment.workTo] : [payment.paidOn],
+      )
       .sort();
     const certificate = data.certificates.find(
       (entry) => entry.subcontractorId === item.subcontractorId && entry.wcExpiration !== null,
@@ -36,9 +38,11 @@ export default async function ChasePage() {
       senderName,
       senderEmail: 'you@yourcompany.example',
       subcontractorName: sub?.name ?? item.subcontractorName,
+      // The dates the letter asks about are the dates the work was performed where the
+      // ledger carries them, and the payment dates only where it does not.
       workDates: {
-        from: payments[0] ?? data.policy!.termStart,
-        to: payments.at(-1) ?? data.policy!.termEnd,
+        from: workDates[0] ?? data.policy!.termStart,
+        to: workDates.at(-1) ?? data.policy!.termEnd,
       },
       policyTermEnd: data.policy!.termEnd,
       producerName: certificate?.producerName ?? null,
@@ -67,7 +71,7 @@ export default async function ChasePage() {
       rows={rows}
       eliminated={totals?.eliminated ?? 0}
       openBalance={totals?.openBalance ?? 0}
-      hasExposure={portfolio.subs.some((sub) => sub.addedPremium > 0)}
+      hasExposure={portfolio.subs.some((sub) => (sub.addedPremium ?? 0) > 0)}
     />
   );
 }

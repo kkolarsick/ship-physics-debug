@@ -95,7 +95,7 @@ export default async function CertificatesPage() {
         sub.paidTotal > 0 &&
         !data.certificates.some((cert) => cert.subcontractorId === sub.subcontractorId),
     )
-    .sort((a, b) => b.addedPremium - a.addedPremium);
+    .sort((a, b) => (b.addedPremium ?? 0) - (a.addedPremium ?? 0));
 
   return (
     <div className="space-y-6">
@@ -131,7 +131,11 @@ export default async function CertificatesPage() {
                     <Money cents={sub.paidTotal} />
                   </td>
                   <td className="num font-semibold text-risk">
-                    <Money cents={sub.addedPremium} />
+                    {sub.addedPremium === null ? (
+                      <span className="text-note">unrated</span>
+                    ) : (
+                      <Money cents={sub.addedPremium} />
+                    )}
                   </td>
                 </tr>
               ))}

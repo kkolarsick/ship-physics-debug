@@ -6,12 +6,13 @@ import {
   patchSubcontractorAction,
   saveManualCertificateAction,
   setMaterialSplitAction,
+  setWorkPeriodAction,
 } from '@/app/actions';
 import { Money } from '@/components/Money';
 import { formatUsDate } from '@/lib/dates';
 import { formatScaled } from '@/lib/money';
 import type { ClassCodeRateRecord } from '@/lib/db/types';
-import type { EntityType, MaterialEvidence } from '@/lib/exposure/types';
+import type { EntityType, MaterialEvidence, SpecialCategory } from '@/lib/exposure/types';
 
 /**
  * The three things a contractor changes on this screen, all of which move the figure:
@@ -21,12 +22,24 @@ import type { EntityType, MaterialEvidence } from '@/lib/exposure/types';
 export interface EditablePayment {
   id: string;
   paidOn: string;
+  workFrom: string | null;
+  workTo: string | null;
   amount: number;
   sourceRef: string | null;
   materialAmount: number | null;
   materialEvidence: MaterialEvidence;
   covered: boolean;
+  /** No work dates on file, so coverage was tested against the payment date. */
+  proxied: boolean;
 }
+
+const SPECIAL_CATEGORY_LABELS: Record<SpecialCategory, string> = {
+  sole_proprietor_no_employees: 'Sole proprietor with no employees',
+  owner_operator_vehicle: 'Owner-operator with their own vehicle',
+  equipment_with_operator: 'Equipment hired with an operator',
+  licensed_professional: 'Licensed professional services',
+  labor_only_no_materials: 'Labor only, no materials',
+};
 
 const ENTITY_LABELS: Record<EntityType, string> = {
   unknown: 'Not recorded',
@@ -49,6 +62,8 @@ export function SubDetailEditors({
   trade,
   notes,
   classCodeRates,
+  specialCategory,
+  priorAuditRate,
   payments,
 }: {
   subcontractorId: string;
@@ -57,6 +72,8 @@ export function SubDetailEditors({
   trade: string | null;
   notes: string | null;
   classCodeRates: readonly ClassCodeRateRecord[];
+  specialCategory: SpecialCategory | null;
+  priorAuditRate: { classCode: string; rate: number } | null;
   payments: readonly EditablePayment[];
 }) {
   const router = useRouter();
@@ -72,7 +89,8 @@ export function SubDetailEditors({
         <div className="panel-head">
           <h2 className="text-sm font-semibold">Payments in the term</h2>
           <p className="text-2xs text-ink-faint">
-            A material deduction needs the original invoice, and is capped at half.
+            Coverage is tested against when the work was performed. Filling in a work period
+            replaces the payment-date proxy.
           </p>
         </div>
         <div className="overflow-x-auto">
@@ -80,7 +98,7 @@ export function SubDetailEditors({
             <thead>
               <tr>
                 <th>Paid</th>
-                <th>Reference</th>
+                <th className="w-56">Work performed</th>
                 <th className="text-right">Amount</th>
                 <th>Against coverage</th>
                 <th className="w-64">Material on the original invoice</th>
@@ -161,6 +179,40 @@ export function SubDetailEditors({
             </label>
 
             <label className="block">
+              <span className="label">Arrangement</span>
+              <select
+                className="field mt-1"
+                defaultValue={specialCategory ?? ''}
+                onChange={(event) =>
+                  startTransition(async () => {
+                    await patchSubcontractorAction({
+                      subcontractorId,
+                      specialCategory: event.target.value === '' ? null : event.target.value,
+                    });
+                    router.refresh();
+                  })
+                }
+              >
+                <option value="">Ordinary subcontract</option>
+                {(Object.keys(SPECIAL_CATEGORY_LABELS) as SpecialCategory[]).map((value) => (
+                  <option key={value} value={value}>
+                    {SPECIAL_CATEGORY_LABELS[value]}
+                  </option>
+                ))}
+              </select>
+              <span className="mt-1 block text-2xs text-ink-faint">
+                Some arrangements are treated differently at audit — equipment hired with an
+                operator, for one. The rules profile decides how, and says so on the figure.
+              </span>
+            </label>
+
+            <PriorAuditRate
+              subcontractorId={subcontractorId}
+              priorAuditRate={priorAuditRate}
+              onSaved={refresh}
+            />
+
+            <label className="block">
               <span className="label">Trade</span>
               <input
                 className="field mt-1"
@@ -232,13 +284,21 @@ function PaymentRow({
 
   return (
     <tr>
-      <td>{formatUsDate(payment.paidOn)}</td>
-      <td className="text-ink-muted">{payment.sourceRef ?? '—'}</td>
+      <td>
+        {formatUsDate(payment.paidOn)}
+        <span className="block text-2xs text-ink-faint">{payment.sourceRef ?? '—'}</span>
+      </td>
+      <td>
+        <WorkPeriodFields payment={payment} onSaved={onSaved} />
+      </td>
       <td className="num">
         <Money cents={payment.amount} />
       </td>
       <td className={payment.covered ? 'text-cleared' : 'text-risk'}>
-        {payment.covered ? 'Inside a window' : 'Outside every window'}
+        {payment.covered ? 'Inside a covered period' : 'Outside every covered period'}
+        {payment.proxied ? (
+          <span className="block text-2xs text-note">Tested by payment date (proxy)</span>
+        ) : null}
       </td>
       <td>
         <div className="flex flex-wrap items-center gap-1.5">
@@ -277,6 +337,122 @@ function PaymentRow({
         ) : null}
       </td>
     </tr>
+  );
+}
+
+function PriorAuditRate({
+  subcontractorId,
+  priorAuditRate,
+  onSaved,
+}: {
+  subcontractorId: string;
+  priorAuditRate: { classCode: string; rate: number } | null;
+  onSaved: () => void;
+}) {
+  const [classCode, setClassCode] = useState(priorAuditRate?.classCode ?? '');
+  const [rate, setRate] = useState(
+    priorAuditRate ? formatScaled(priorAuditRate.rate, 10_000, 2) : '',
+  );
+  const [pending, startTransition] = useTransition();
+
+  function save(): void {
+    startTransition(async () => {
+      await patchSubcontractorAction({
+        subcontractorId,
+        priorAuditClassCode: classCode.trim() === '' ? null : classCode.trim(),
+        priorAuditRate: rate.trim() === '' ? null : rate.trim(),
+      });
+      onSaved();
+    });
+  }
+
+  return (
+    <div>
+      <span className="label">Rate applied on a prior audit</span>
+      <div className="mt-1 flex items-center gap-2">
+        <input
+          className="field w-24 py-1.5 text-sm"
+          placeholder="Class"
+          value={classCode}
+          disabled={pending}
+          onChange={(event) => setClassCode(event.target.value)}
+          onBlur={save}
+          aria-label="Prior audit class code"
+        />
+        <input
+          className="field w-24 py-1.5 text-sm"
+          placeholder="12.40"
+          inputMode="decimal"
+          value={rate}
+          disabled={pending}
+          onChange={(event) => setRate(event.target.value)}
+          onBlur={save}
+          aria-label="Prior audit rate"
+        />
+      </div>
+      <span className="mt-1 block text-2xs text-ink-faint">
+        What an auditor actually applied to this subcontractor last time. This replaces the
+        governing-rate proxy and raises the confidence of the figure.
+      </span>
+    </div>
+  );
+}
+
+function WorkPeriodFields({
+  payment,
+  onSaved,
+}: {
+  payment: EditablePayment;
+  onSaved: () => void;
+}) {
+  const [from, setFrom] = useState(payment.workFrom ?? '');
+  const [to, setTo] = useState(payment.workTo ?? '');
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  function save(nextFrom: string, nextTo: string): void {
+    // Both ends or neither: half a period is not a period, and would be tested as if it
+    // were one.
+    if ((nextFrom === '') !== (nextTo === '')) return;
+    startTransition(async () => {
+      const result = await setWorkPeriodAction({
+        paymentId: payment.id,
+        workFrom: nextFrom === '' ? null : nextFrom,
+        workTo: nextTo === '' ? null : nextTo,
+      });
+      setError(result.ok ? null : (result.fieldErrors?.workTo ?? result.message ?? 'Not saved.'));
+      if (result.ok) onSaved();
+    });
+  }
+
+  return (
+    <div>
+      <div className="flex items-center gap-1">
+        <input
+          type="date"
+          className="field w-32 py-1 text-2xs"
+          value={from}
+          disabled={pending}
+          onChange={(event) => setFrom(event.target.value)}
+          onBlur={() => save(from, to)}
+          aria-label="Work performed from"
+        />
+        <span className="text-2xs text-ink-faint">–</span>
+        <input
+          type="date"
+          className="field w-32 py-1 text-2xs"
+          value={to}
+          disabled={pending}
+          onChange={(event) => setTo(event.target.value)}
+          onBlur={() => save(from, to)}
+          aria-label="Work performed to"
+        />
+      </div>
+      {error ? <p className="mt-1 text-2xs text-risk">{error}</p> : null}
+      {from === '' && to === '' ? (
+        <p className="mt-1 text-2xs text-note">Not on file — payment date used as a proxy.</p>
+      ) : null}
+    </div>
   );
 }
 

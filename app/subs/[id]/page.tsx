@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { ConfidencePanel } from '@/components/Confidence';
 import { CoverageTimeline } from '@/components/CoverageTimeline';
 import { Disclaimer } from '@/components/Disclaimer';
 import { FlagList } from '@/components/Flags';
@@ -8,7 +9,7 @@ import { certificatesFor, loadWorkspace, paymentsFor, subById } from '@/lib/app/
 import { COVERAGE_LANGUAGE } from '@/lib/copy';
 import { formatUsDate } from '@/lib/dates';
 import { formatDollars, formatMod, formatRate } from '@/lib/money';
-import { ZERO_REASON_LABELS } from '@/lib/exposure/labels';
+import { RATE_PROVENANCE_LABELS, ZERO_REASON_LABELS } from '@/lib/exposure/labels';
 import { SubDetailEditors } from './SubDetailEditors';
 
 export const dynamic = 'force-dynamic';
@@ -28,7 +29,9 @@ export default async function SubDetailPage({
 
   const payments = paymentsFor(data, id);
   const certificates = certificatesFor(data, id);
-  const coveredIds = new Set(exposure.coveredPaymentIds);
+  const assessmentByPayment = new Map(
+    exposure.assessments.map((assessment) => [assessment.paymentId, assessment]),
+  );
 
   return (
     <div className="space-y-6">
@@ -41,17 +44,21 @@ export default async function SubDetailPage({
           </p>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight">{sub.name}</h1>
           <p className="mt-1 text-sm text-ink-muted">
-            {sub.trade ?? 'Trade not recorded'} · Class {exposure.classCode} @{' '}
-            {formatRate(exposure.rate)} per $100 · mod {formatMod(exposure.experienceMod)}
+            {sub.trade ?? 'Trade not recorded'} · Class {exposure.rate.classCode ?? 'unknown'}
+            {exposure.rate.rate === null ? '' : ` @ ${formatRate(exposure.rate.rate)} per $100`} ·
+            mod {formatMod(exposure.experienceMod)}
+          </p>
+          <p className="mt-1 max-w-xl text-2xs text-ink-faint">
+            Rate basis: {RATE_PROVENANCE_LABELS[exposure.rate.provenance]}. {exposure.rate.statement}
           </p>
         </div>
         <div className="text-right">
           <p className="label">Added premium</p>
           <p className="text-4xl font-semibold leading-none tracking-tight text-risk">
-            {formatDollars(exposure.addedPremium)}
+            {exposure.addedPremium === null ? 'Unrated' : formatDollars(exposure.addedPremium)}
           </p>
           <p className="mt-1 text-2xs text-ink-faint">
-            {exposure.addedPremium > 0
+            {(exposure.addedPremium ?? 0) > 0
               ? COVERAGE_LANGUAGE.uncovered
               : exposure.zeroReason
                 ? ZERO_REASON_LABELS[exposure.zeroReason]
@@ -64,20 +71,29 @@ export default async function SubDetailPage({
         termStart={data.policy.termStart}
         termEnd={data.policy.termEnd}
         windows={exposure.coverageWindows}
-        payments={payments.map((payment) => ({
-          id: payment.id,
-          paidOn: payment.paidOn,
-          amount: payment.amount,
-          covered: coveredIds.has(payment.id),
-          sourceRef: payment.sourceRef,
-        }))}
+        payments={payments.map((payment) => {
+          const assessment = assessmentByPayment.get(payment.id);
+          return {
+            id: payment.id,
+            paidOn: payment.paidOn,
+            workFrom: payment.workFrom,
+            workTo: payment.workTo,
+            amount: payment.amount,
+            covered: assessment !== undefined && assessment.uncoveredAmount === 0,
+            partial: assessment?.partialOverlap ?? false,
+            proxied: assessment?.basis === 'payment_date_proxy',
+            sourceRef: payment.sourceRef,
+          };
+        })}
       />
 
       <section className="grid items-start gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <div className="panel">
           <div className="panel-head">
             <h2 className="text-sm font-semibold">How this figure was produced</h2>
-            <p className="text-2xs text-ink-faint">Ruleset {exposure.rulesetVersion}</p>
+            <p className="text-2xs text-ink-faint">
+              {exposure.provenance.rulesetId} {exposure.provenance.rulesetVersion}
+            </p>
           </div>
           <table className="workpaper-table">
             <tbody>
@@ -106,15 +122,19 @@ export default async function SubDetailPage({
               <tr>
                 <td className="px-3 py-2 text-ink-muted">Rated</td>
                 <td className="num px-3 py-2 text-ink-muted">
-                  {exposure.addedPayroll > 0
-                    ? `${formatDollars(exposure.addedPayroll)} ÷ 100 × ${formatRate(exposure.rate)} × ${formatMod(exposure.experienceMod)}`
+                  {exposure.addedPayroll > 0 && exposure.rate.rate !== null
+                    ? `${formatDollars(exposure.addedPayroll)} ÷ 100 × ${formatRate(exposure.rate.rate)} × ${formatMod(exposure.experienceMod)}`
                     : '—'}
                 </td>
               </tr>
               <tr className="border-t-2 border-ink">
                 <td className="px-3 py-2 font-semibold">Estimated additional premium</td>
                 <td className="num px-3 py-2 font-semibold text-risk">
-                  <Money cents={exposure.addedPremium} exact zero="$0.00" />
+                  {exposure.addedPremium === null ? (
+                    <span className="text-note">No premium figure — no defensible rate</span>
+                  ) : (
+                    <Money cents={exposure.addedPremium} exact zero="$0.00" />
+                  )}
                 </td>
               </tr>
             </tbody>
@@ -124,15 +144,15 @@ export default async function SubDetailPage({
             <p className="label">If you get the document</p>
             <dl className="mt-2 space-y-1 text-sm">
               <div className="flex items-baseline justify-between gap-4">
-                <dt className="text-ink-muted">A certificate covering these dates removes</dt>
+                <dt className="text-ink-muted">A certificate covering the period worked removes</dt>
                 <dd className="num">
-                  <Money cents={exposure.ifCertificateObtained} />
+                  <Money cents={exposure.ifCertificateObtained ?? 0} />
                 </dd>
               </div>
               <div className="flex items-baseline justify-between gap-4">
                 <dt className="text-ink-muted">An original split invoice removes</dt>
                 <dd className="num">
-                  <Money cents={exposure.ifSplitInvoiceObtained} />
+                  <Money cents={exposure.ifSplitInvoiceObtained ?? 0} />
                 </dd>
               </div>
             </dl>
@@ -189,18 +209,30 @@ export default async function SubDetailPage({
         trade={sub.trade}
         notes={sub.notes}
         classCodeRates={data.classCodeRates}
-        payments={payments.map((payment) => ({
-          id: payment.id,
-          paidOn: payment.paidOn,
-          amount: payment.amount,
-          sourceRef: payment.sourceRef,
-          materialAmount: payment.materialAmount,
-          materialEvidence: payment.materialEvidence,
-          covered: coveredIds.has(payment.id),
-        }))}
+        specialCategory={sub.specialCategory}
+        priorAuditRate={sub.priorAuditRate}
+        payments={payments.map((payment) => {
+          const assessment = assessmentByPayment.get(payment.id);
+          return {
+            id: payment.id,
+            paidOn: payment.paidOn,
+            workFrom: payment.workFrom,
+            workTo: payment.workTo,
+            amount: payment.amount,
+            sourceRef: payment.sourceRef,
+            materialAmount: payment.materialAmount,
+            materialEvidence: payment.materialEvidence,
+            covered: assessment !== undefined && assessment.uncoveredAmount === 0,
+            proxied: assessment?.basis === 'payment_date_proxy',
+          };
+        })}
       />
 
-      <Disclaimer rulesetVersion={exposure.rulesetVersion} />
+      <ConfidencePanel confidence={exposure.confidence} title="What this subcontractor's figure rests on" />
+
+      <Disclaimer
+        rulesetVersion={`${exposure.provenance.rulesetId} ${exposure.provenance.rulesetVersion}`}
+      />
     </div>
   );
 }

@@ -13,7 +13,6 @@ import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { normalizeName } from '@/lib/matching/normalize';
-import { RULESET } from '@/lib/exposure/ruleset';
 import type { PortfolioExposure, TriageDecision } from '@/lib/exposure/types';
 import type { NewPayment, Store } from './store';
 import type {
@@ -184,6 +183,8 @@ export class DemoStore implements Store {
           trade: null,
           triage: 'undecided',
           classCodeOverride: null,
+          priorAuditRate: null,
+          specialCategory: null,
           notes: null,
         };
         data.subcontractors.push(record);
@@ -212,7 +213,9 @@ export class DemoStore implements Store {
 
   async patchSubcontractor(
     subcontractorId: string,
-    patch: Partial<Pick<SubcontractorRecord, 'entityType' | 'trade' | 'notes'>> & {
+    patch: Partial<
+      Pick<SubcontractorRecord, 'entityType' | 'trade' | 'notes' | 'specialCategory' | 'priorAuditRate'>
+    > & {
       classCodeRateId?: string | null;
     },
   ): Promise<void> {
@@ -262,6 +265,8 @@ export class DemoStore implements Store {
           orgId: data.org.id,
           subcontractorId: payment.subcontractorId,
           paidOn: payment.paidOn,
+          workFrom: payment.workFrom,
+          workTo: payment.workTo,
           amount: payment.amount,
           sourceRef: payment.sourceRef,
           memo: payment.memo,
@@ -327,6 +332,28 @@ export class DemoStore implements Store {
     });
   }
 
+  async setPaymentWorkPeriod(
+    paymentId: string,
+    workFrom: string | null,
+    workTo: string | null,
+  ): Promise<void> {
+    this.mutate((data) => {
+      const index = data.payments.findIndex((payment) => payment.id === paymentId);
+      if (index < 0) return;
+      const before = data.payments[index]!;
+      const after: PaymentRecord = { ...before, workFrom, workTo };
+      data.payments[index] = after;
+      appendEvent(data, {
+        actor: 'user',
+        entityType: 'payment',
+        entityId: paymentId,
+        action: 'work_period',
+        before: { workFrom: before.workFrom, workTo: before.workTo },
+        after: { workFrom, workTo },
+      });
+    });
+  }
+
   async createCertificate(
     input: Omit<CertificateRecord, 'id' | 'orgId' | 'createdAt'>,
   ): Promise<CertificateRecord> {
@@ -383,7 +410,7 @@ export class DemoStore implements Store {
   async matchCertificate(
     certificateId: string,
     subcontractorId: string | null,
-    options: { saveAlias: boolean },
+    options: { saveAlias: boolean; method?: CertificateRecord['matchMethod'] },
   ): Promise<void> {
     this.mutate((data) => {
       const index = data.certificates.findIndex((cert) => cert.id === certificateId);
@@ -392,6 +419,7 @@ export class DemoStore implements Store {
       data.certificates[index] = {
         ...before,
         subcontractorId,
+        matchMethod: subcontractorId === null ? 'unmatched' : (options.method ?? 'manual'),
         status: subcontractorId === null ? before.status : 'matched',
       };
 
@@ -491,12 +519,16 @@ export class DemoStore implements Store {
         id: randomUUID(),
         orgId: data.org.id,
         policyId: portfolio.policyId,
-        rulesetVersion: portfolio.rulesetVersion,
+        rulesetId: portfolio.provenance.rulesetId,
+        rulesetVersion: portfolio.provenance.rulesetVersion,
+        jurisdiction: portfolio.provenance.jurisdiction,
+        ratingBureau: portfolio.provenance.ratingBureau,
+        confidenceLevel: portfolio.confidence.level,
         totalExposure: portfolio.totalExposure,
         addedPayroll: portfolio.addedPayroll,
-        surcharge: portfolio.surcharge,
+        surcharge: portfolio.auditNoncompliance.charge,
         reason,
-        createdAt: portfolio.computedAt,
+        createdAt: portfolio.provenance.computedAt,
       };
       data.snapshots.push(record);
       appendEvent(data, {
@@ -507,7 +539,9 @@ export class DemoStore implements Store {
         before: null,
         after: {
           totalExposure: record.totalExposure,
+          rulesetId: record.rulesetId,
           rulesetVersion: record.rulesetVersion,
+          confidenceLevel: record.confidenceLevel,
         },
       });
       return record;
@@ -564,6 +598,7 @@ function certificateFacts(record: CertificateRecord): Record<string, unknown> {
     wcExpiration: record.wcExpiration,
     wcOfficerExclusionNoted: record.wcOfficerExclusionNoted,
     extractionConfidenceThousandths: record.extractionConfidenceThousandths,
-    rulesetVersion: RULESET.version,
+    matchMethod: record.matchMethod,
+    evidence: record.evidence,
   };
 }

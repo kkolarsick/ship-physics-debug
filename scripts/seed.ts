@@ -19,6 +19,7 @@ import {
   GOLDEN_POLICY,
   GOLDEN_SUBS,
 } from '../lib/exposure/fixtures';
+import { CONFIDENCE_LABELS } from '../lib/exposure/confidence';
 import { computePortfolioExposure } from '../lib/exposure/compute';
 import { normalizeName } from '../lib/matching/normalize';
 import { formatDollars } from '../lib/money';
@@ -62,7 +63,9 @@ const subs: SubcontractorRecord[] = GOLDEN_SUBS.map((sub) => ({
   entityType: sub.entityType,
   trade: sub.trade,
   triage: 'subcontractor',
-  classCodeOverride: null,
+  classCodeOverride: sub.classCodeOverride,
+  priorAuditRate: null,
+  specialCategory: null,
   notes: null,
 }));
 
@@ -78,6 +81,8 @@ subs.push({
   trade: 'Material supplier',
   triage: 'supplier',
   classCodeOverride: null,
+  priorAuditRate: null,
+  specialCategory: null,
   notes: 'Material only — no labor on site.',
 });
 
@@ -89,6 +94,8 @@ const payments: PaymentRecord[] = GOLDEN_PAYMENTS.map((payment) => ({
   orgId,
   subcontractorId: idByFixture.get(payment.subcontractorId)!,
   paidOn: payment.paidOn,
+  workFrom: payment.workFrom,
+  workTo: payment.workTo,
   amount: payment.amount,
   sourceRef: payment.sourceRef,
   memo: null,
@@ -112,7 +119,14 @@ file.batches = [
     sourceFilename: 'expenses-by-vendor-detail-2025.csv',
     storagePath: null,
     preset: 'qbo_expenses_by_vendor_detail',
-    columnMapping: { vendorName: 'Date', paidOn: 'Date', amount: 'Amount', sourceRef: 'Num' },
+    columnMapping: {
+      vendorName: 'Date',
+      paidOn: 'Date',
+      amount: 'Amount',
+      sourceRef: 'Num',
+      workFrom: 'Service From',
+      workTo: 'Service To',
+    },
     rowCount: payments.length + 12,
     importedCount: payments.length,
     excluded: {
@@ -153,7 +167,9 @@ const certificates: CertificateRecord[] = GOLDEN_CERTIFICATES.map((cert) => ({
   extractionConfidenceThousandths: 940,
   extractionError: null,
   rawExtraction: null,
-  reviewedByUserAt: null,
+  reviewedByUserAt: now,
+  evidence: 'reviewed_by_user',
+  matchMethod: 'manual',
   createdAt: now,
 }));
 
@@ -183,7 +199,9 @@ certificates.push({
   extractionConfidenceThousandths: 910,
   extractionError: null,
   rawExtraction: null,
-  reviewedByUserAt: null,
+  reviewedByUserAt: now,
+  evidence: 'reviewed_by_user',
+  matchMethod: 'manual',
   createdAt: now,
 });
 
@@ -215,6 +233,8 @@ certificates.push({
   extractionError: null,
   rawExtraction: null,
   reviewedByUserAt: null,
+  evidence: 'model_extracted',
+  matchMethod: 'unmatched',
   createdAt: now,
 });
 
@@ -237,18 +257,29 @@ file.auditEvents = [
 mkdirSync(dirname(DEMO_DATA_PATH), { recursive: true });
 writeFileSync(DEMO_DATA_PATH, `${JSON.stringify(file, null, 2)}\n`);
 
-const portfolio = computePortfolioExposure(
-  file.subcontractors,
-  file.payments,
-  file.certificates,
-  file.policies[0]!,
-);
+const portfolio = computePortfolioExposure({
+  subs: file.subcontractors,
+  payments: file.payments,
+  certificates: file.certificates,
+  policy: file.policies[0]!,
+});
 
 console.log(`Seeded ${DEMO_DATA_PATH}`);
 console.log(`  ${file.subcontractors.length} vendors, ${file.payments.length} payments, ${file.certificates.length} certificates`);
+console.log(`  Jurisdiction   ${GOLDEN_POLICY.jurisdiction} · ${portfolio.provenance.ratingBureau}`);
+console.log(`  Ruleset        ${portfolio.provenance.rulesetId} ${portfolio.provenance.rulesetVersion} (${portfolio.provenance.rulesProfileStatus})`);
 console.log(`  Added payroll  ${formatDollars(portfolio.addedPayroll)}`);
-console.log(`  Added premium  ${formatDollars(portfolio.totalExposure)}  (ruleset ${portfolio.rulesetVersion})`);
+console.log(`  Added premium  ${formatDollars(portfolio.totalExposure)}`);
+console.log(`  Confidence     ${CONFIDENCE_LABELS[portfolio.confidence.level]}`);
+for (const assumption of portfolio.confidence.assumptions) {
+  console.log(`    assumption: ${assumption}`);
+}
 
+/**
+ * The supplier rows deliberately carry no work period: a lumber yard's invoices rarely do,
+ * and it is worth seeing what the payment-date proxy looks like on a screen. It costs
+ * nothing here — the vendor is triaged as a supplier, so it prices at zero either way.
+ */
 function payment(
   subcontractorId: string,
   paidOn: string,
@@ -262,6 +293,8 @@ function payment(
     orgId: org,
     subcontractorId,
     paidOn,
+    workFrom: null,
+    workTo: null,
     amount,
     sourceRef,
     memo: null,

@@ -16,6 +16,9 @@ export interface LedgerPreset {
     readonly amount: readonly string[];
     readonly sourceRef: readonly string[];
     readonly memo: readonly string[];
+    /** Service/work period columns. Rare in AP exports, common in job-cost exports. */
+    readonly workFrom: readonly string[];
+    readonly workTo: readonly string[];
   };
 }
 
@@ -25,6 +28,14 @@ const GENERIC_ALIASES = {
   amount: ['amount', 'total', 'paid', 'payment amount', 'debit', 'net amount'],
   sourceRef: ['num', 'number', 'check #', 'check number', 'invoice', 'invoice #', 'reference', 'ref'],
   memo: ['memo', 'description', 'memo/description', 'notes'],
+  workFrom: [
+    'work from', 'service from', 'period from', 'work start', 'service start',
+    'start date', 'from date', 'job start',
+  ],
+  workTo: [
+    'work to', 'service to', 'period to', 'work end', 'service end',
+    'end date', 'to date', 'job end', 'completion date',
+  ],
 } as const;
 
 export const LEDGER_PRESETS: readonly LedgerPreset[] = [
@@ -38,6 +49,8 @@ export const LEDGER_PRESETS: readonly LedgerPreset[] = [
       amount: ['amount', 'total', ...GENERIC_ALIASES.amount],
       sourceRef: ['num', 'no.', ...GENERIC_ALIASES.sourceRef],
       memo: ['memo/description', 'memo', ...GENERIC_ALIASES.memo],
+      workFrom: GENERIC_ALIASES.workFrom,
+      workTo: GENERIC_ALIASES.workTo,
     },
   },
   {
@@ -50,6 +63,8 @@ export const LEDGER_PRESETS: readonly LedgerPreset[] = [
       amount: ['amount', '1099 amount', 'total amount', ...GENERIC_ALIASES.amount],
       sourceRef: ['num', ...GENERIC_ALIASES.sourceRef],
       memo: ['memo/description', ...GENERIC_ALIASES.memo],
+      workFrom: GENERIC_ALIASES.workFrom,
+      workTo: GENERIC_ALIASES.workTo,
     },
   },
   {
@@ -62,6 +77,8 @@ export const LEDGER_PRESETS: readonly LedgerPreset[] = [
       amount: ['payment amount', 'check amount', 'amount paid', ...GENERIC_ALIASES.amount],
       sourceRef: ['check number', 'check#', 'invoice number', ...GENERIC_ALIASES.sourceRef],
       memo: ['description', ...GENERIC_ALIASES.memo],
+      workFrom: ['service from', 'work start', ...GENERIC_ALIASES.workFrom],
+      workTo: ['service to', 'work end', ...GENERIC_ALIASES.workTo],
     },
   },
   {
@@ -74,6 +91,8 @@ export const LEDGER_PRESETS: readonly LedgerPreset[] = [
       amount: ['payment amount', 'gross', 'amount', ...GENERIC_ALIASES.amount],
       sourceRef: ['check no', 'check no.', 'invoice no', ...GENERIC_ALIASES.sourceRef],
       memo: ['description', ...GENERIC_ALIASES.memo],
+      workFrom: ['period from', ...GENERIC_ALIASES.workFrom],
+      workTo: ['period to', ...GENERIC_ALIASES.workTo],
     },
   },
   {

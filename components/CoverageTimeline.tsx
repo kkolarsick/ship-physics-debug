@@ -15,8 +15,15 @@ import type { CoverageWindow } from '@/lib/exposure/types';
 export interface TimelinePayment {
   readonly id: string;
   readonly paidOn: IsoDate;
+  /** The period the work was performed, when it is on file. */
+  readonly workFrom: IsoDate | null;
+  readonly workTo: IsoDate | null;
   readonly amount: Cents;
   readonly covered: boolean;
+  /** The period straddles a coverage boundary. */
+  readonly partial: boolean;
+  /** No work dates on file, so the payment date stood in. */
+  readonly proxied: boolean;
   readonly sourceRef: string | null;
 }
 
@@ -52,7 +59,7 @@ export function CoverageTimeline({
   return (
     <figure className="panel">
       <figcaption className="panel-head">
-        <h3 className="text-sm font-semibold">Payments against coverage on file</h3>
+        <h3 className="text-sm font-semibold">Work performed against coverage on file</h3>
         <Legend />
       </figcaption>
       <div className="overflow-x-auto px-2 py-3">
@@ -114,34 +121,64 @@ export function CoverageTimeline({
           />
 
           {payments.map((payment) => {
-            const cx = x(payment.paidOn);
+            // The marker sits on the period tested, not on the check date: the work period
+            // where one is on file, the payment date only where one is not.
+            const from = payment.workFrom ?? payment.paidOn;
+            const to = payment.workTo ?? payment.paidOn;
+            const cx = x(from);
+            const cxEnd = x(to);
             const barHeight = 8 + (payment.amount / maxAmount) * 26;
             const color = payment.covered ? '#2E5C42' : '#9E2B1B';
+            const markerY = AXIS_Y - barHeight;
             return (
               <g key={payment.id}>
+                {/* The span of work, drawn along the axis. */}
+                {cxEnd - cx > 1 ? (
+                  <line
+                    x1={cx}
+                    x2={cxEnd}
+                    y1={AXIS_Y - 4}
+                    y2={AXIS_Y - 4}
+                    stroke={color}
+                    strokeWidth={3}
+                    strokeOpacity={payment.covered ? 0.4 : 0.8}
+                  />
+                ) : null}
                 <line
                   x1={cx}
                   x2={cx}
                   y1={AXIS_Y}
-                  y2={AXIS_Y - barHeight}
+                  y2={markerY}
                   stroke={color}
                   strokeWidth={2}
                   strokeOpacity={payment.covered ? 0.55 : 1}
+                  strokeDasharray={payment.proxied ? '2 2' : undefined}
                 />
                 <circle
                   cx={cx}
-                  cy={AXIS_Y - barHeight}
+                  cy={markerY}
                   r={3}
                   fill={payment.covered ? '#FFFFFF' : color}
                   stroke={color}
                   strokeWidth={1.5}
                 />
+                {payment.proxied ? (
+                  <text x={cx} y={markerY - 6} textAnchor="middle" fontSize={8} fill="#8A6A17">
+                    ?
+                  </text>
+                ) : null}
                 <title>
-                  {formatUsDate(payment.paidOn)} · {formatDollars(payment.amount)}
+                  {payment.proxied
+                    ? `Paid ${formatUsDate(payment.paidOn)} · no work dates on file, payment date used as a proxy`
+                    : `Work ${formatUsDate(from)} – ${formatUsDate(to)} · paid ${formatUsDate(payment.paidOn)}`}
+                  {' · '}
+                  {formatDollars(payment.amount)}
                   {payment.sourceRef ? ` · ${payment.sourceRef}` : ''} ·{' '}
-                  {payment.covered
-                    ? 'inside a covered window on file'
-                    : 'outside every covered window on file'}
+                  {payment.partial
+                    ? 'straddles a coverage boundary'
+                    : payment.covered
+                      ? 'inside a covered period on file'
+                      : 'outside every covered period on file'}
                 </title>
               </g>
             );
@@ -165,7 +202,11 @@ function Legend() {
       </span>
       <span className="inline-flex items-center gap-1.5">
         <span className="inline-block h-2.5 w-2.5 rounded-full bg-risk" />
-        Payment outside every window
+        Outside every window
+      </span>
+      <span className="inline-flex items-center gap-1.5 text-note">
+        <span className="font-mono">?</span>
+        No work dates — payment date used as a proxy
       </span>
     </div>
   );

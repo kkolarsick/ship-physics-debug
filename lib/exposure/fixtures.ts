@@ -1,18 +1,34 @@
 /**
- * The golden fixtures from brief §6d, in one place so the Vitest suite, the seed script,
- * and the demo dataset can never drift from each other.
+ * The golden fixtures, in one place so the Vitest suite, the seed script, and the demo
+ * dataset can never drift from each other.
  *
- * Rate 12.40, mod 1.05, no surcharge, all payments inside the term.
- * Expected totals: $405,700 added payroll, $52,822 added premium.
+ * These are jurisdiction-aware: the policy names a jurisdiction and a rating bureau, every
+ * subcontractor carries the class its work was actually rated at, and every payment
+ * carries the period the work was performed. That is deliberate — this set is the
+ * high-confidence case, the one where nothing is proxied, and it doubles as the regression
+ * anchor for the arithmetic ($405,700 added payroll, $52,822 added premium under the NCCI
+ * profile at rate 12.40 and mod 1.050).
+ *
+ * The degraded cases — no work dates, no class code, an unsupported jurisdiction — live in
+ * the tests, where they belong.
  */
+import { US_NCCI_BASIC_MANUAL } from '@/lib/rules/profiles';
 import type {
   CertificateInput,
   PaymentInput,
   PolicyInput,
   SubcontractorInput,
 } from './types';
+import { NO_AUDIT_COMPLIANCE_ISSUES } from './types';
 
 const dollars = (amount: number): number => Math.round(amount * 100);
+
+/** Rate 12.40 per $100, the rate the §6d table assumes for every subcontractor. */
+const GOVERNING_RATE = 124_000;
+const CARPENTRY = { classCode: '5645', rate: GOVERNING_RATE };
+
+export const GOLDEN_JURISDICTION = 'US-TN';
+export const GOLDEN_PROFILE = US_NCCI_BASIC_MANUAL;
 
 export const GOLDEN_POLICY: PolicyInput = {
   id: 'policy-golden',
@@ -20,9 +36,13 @@ export const GOLDEN_POLICY: PolicyInput = {
   termEnd: '2025-12-31',
   experienceMod: 1_050, // 1.050
   estimatedAnnualPremium: dollars(180_000),
-  noncomplianceSurchargePct: 0,
   governingClassCode: '5645',
-  governingRate: 124_000, // 12.40 per $100 of payroll
+  governingRate: GOVERNING_RATE,
+  jurisdiction: GOLDEN_JURISDICTION,
+  ratingBureau: 'NCCI',
+  rulesetId: null,
+  rulesetVersion: null,
+  auditCompliance: NO_AUDIT_COMPLIANCE_ISSUES,
 };
 
 export const GOLDEN_SUBS: readonly SubcontractorInput[] = [
@@ -37,31 +57,31 @@ export const GOLDEN_SUBS: readonly SubcontractorInput[] = [
 export const GOLDEN_PAYMENTS: readonly PaymentInput[] = [
   // Kowalczyk Framing — $214,000 paid, no workers' comp certificate on file,
   // original invoice on hand splitting $74,000 of materials out of the total.
-  payment('kow-1', 'kowalczyk', '2025-03-14', 90_000, 'INV-2201', 30_000, 'original_invoice'),
-  payment('kow-2', 'kowalczyk', '2025-07-08', 124_000, 'INV-2288', 44_000, 'original_invoice'),
+  payment('kow-1', 'kowalczyk', '2025-03-14', ['2025-02-03', '2025-03-07'], 90_000, 'INV-2201', 30_000, 'original_invoice'),
+  payment('kow-2', 'kowalczyk', '2025-07-08', ['2025-05-19', '2025-06-27'], 124_000, 'INV-2288', 44_000, 'original_invoice'),
 
   // Delgado Electric — $96,500 paid, certificate covers the whole span of the work.
-  payment('del-1', 'delgado', '2025-02-20', 41_500, 'INV-5510', null, 'none'),
-  payment('del-2', 'delgado', '2025-09-02', 55_000, 'INV-5642', null, 'none'),
+  payment('del-1', 'delgado', '2025-02-20', ['2025-01-13', '2025-02-07'], 41_500, 'INV-5510', null, 'none'),
+  payment('del-2', 'delgado', '2025-09-02', ['2025-07-28', '2025-08-22'], 55_000, 'INV-5642', null, 'none'),
 
-  // Ridgeline Roofing — $143,000 paid, the only certificate on file expired before any
-  // of these payments, so none of the work sits inside a covered window.
-  payment('ridge-1', 'ridgeline', '2025-03-03', 48_000, 'INV-880', null, 'none'),
-  payment('ridge-2', 'ridgeline', '2025-06-19', 52_000, 'INV-913', null, 'none'),
-  payment('ridge-3', 'ridgeline', '2025-09-30', 43_000, 'INV-957', null, 'none'),
+  // Ridgeline Roofing — $143,000 paid, the only certificate on file expired before any of
+  // this work started, so none of it sits inside a covered window.
+  payment('ridge-1', 'ridgeline', '2025-03-03', ['2025-02-10', '2025-02-28'], 48_000, 'INV-880', null, 'none'),
+  payment('ridge-2', 'ridgeline', '2025-06-19', ['2025-05-27', '2025-06-13'], 52_000, 'INV-913', null, 'none'),
+  payment('ridge-3', 'ridgeline', '2025-09-30', ['2025-09-02', '2025-09-24'], 43_000, 'INV-957', null, 'none'),
 
-  // B&K Drywall — $58,200 paid, nothing on file at all.
-  payment('bk-1', 'bk-drywall', '2025-04-11', 26_400, 'INV-119', null, 'none'),
-  payment('bk-2', 'bk-drywall', '2025-08-22', 31_800, 'INV-142', null, 'none'),
+  // B&K Drywall — $58,200 paid, a certificate on file with an empty workers' comp section.
+  payment('bk-1', 'bk-drywall', '2025-04-11', ['2025-03-17', '2025-04-04'], 26_400, 'INV-119', null, 'none'),
+  payment('bk-2', 'bk-drywall', '2025-08-22', ['2025-07-21', '2025-08-15'], 31_800, 'INV-142', null, 'none'),
 
   // Tri-State Plumbing — $71,400 paid, covered.
-  payment('tri-1', 'tristate', '2025-05-06', 33_400, 'INV-7701', null, 'none'),
-  payment('tri-2', 'tristate', '2025-10-15', 38_000, 'INV-7788', null, 'none'),
+  payment('tri-1', 'tristate', '2025-05-06', ['2025-04-07', '2025-04-30'], 33_400, 'INV-7701', null, 'none'),
+  payment('tri-2', 'tristate', '2025-10-15', ['2025-09-15', '2025-10-10'], 38_000, 'INV-7788', null, 'none'),
 
-  // Vega Concrete — $129,000 paid, no certificate, $81,000 of material claimed against a
-  // 50% cap. This is the cap-binding case: $64,500 is the deduction the model allows.
-  payment('vega-1', 'vega', '2025-02-27', 60_000, 'INV-311', 40_000, 'original_invoice'),
-  payment('vega-2', 'vega', '2025-06-30', 69_000, 'INV-364', 41_000, 'original_invoice'),
+  // Vega Concrete — $129,000 paid, no certificate, $81,000 of material claimed against the
+  // profile's cap. This is the cap-binding case: $64,500 is the deduction it allows.
+  payment('vega-1', 'vega', '2025-02-27', ['2025-01-27', '2025-02-21'], 60_000, 'INV-311', 40_000, 'original_invoice'),
+  payment('vega-2', 'vega', '2025-06-30', ['2025-06-02', '2025-06-24'], 69_000, 'INV-364', 41_000, 'original_invoice'),
 ];
 
 export const GOLDEN_CERTIFICATES: readonly CertificateInput[] = [
@@ -106,13 +126,25 @@ function sub(
   entityType: SubcontractorInput['entityType'],
   trade: string,
 ): SubcontractorInput {
-  return { id, name, entityType, trade, triage: 'subcontractor', classCodeOverride: null };
+  return {
+    id,
+    name,
+    entityType,
+    trade,
+    triage: 'subcontractor',
+    // The §6d table rates every subcontractor at 12.40, so each carries that class
+    // explicitly. Nothing in this fixture rests on a governing-rate proxy.
+    classCodeOverride: CARPENTRY,
+    priorAuditRate: null,
+    specialCategory: null,
+  };
 }
 
 function payment(
   id: string,
   subcontractorId: string,
   paidOn: string,
+  work: readonly [string, string],
   amount: number,
   sourceRef: string,
   material: number | null,
@@ -122,6 +154,8 @@ function payment(
     id,
     subcontractorId,
     paidOn,
+    workFrom: work[0],
+    workTo: work[1],
     amount: dollars(amount),
     sourceRef,
     materialAmount: material === null ? null : dollars(material),
@@ -148,5 +182,7 @@ function certificate(
     glPresent: true,
     producerName: producer.producerName,
     producerEmail: producer.producerEmail,
+    evidence: 'reviewed_by_user',
+    matchMethod: 'manual',
   };
 }

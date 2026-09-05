@@ -170,6 +170,74 @@ Gamma,03/01/2025,"0.00"
   });
 });
 
+describe('work periods', () => {
+  const csv = `Vendor,Date,Service From,Service To,Amount
+Kowalczyk Framing,08/15/2025,05/01/2025,05/28/2025,"90,000.00"
+Ridgeline Roofing,08/15/2025,,,"52,000.00"
+Vega Concrete,08/15/2025,06/01/2025,,"60,000.00"
+Summit Excavation,08/15/2025,09/01/2025,06/01/2025,"20,000.00"
+`;
+
+  const table = sniffTable(csv);
+  const preview = buildImportPreview({
+    table,
+    mapping: {
+      vendorName: 'Vendor',
+      paidOn: 'Date',
+      amount: 'Amount',
+      workFrom: 'Service From',
+      workTo: 'Service To',
+    },
+    ...TERM,
+  });
+
+  it('suggests the work-period columns when the export has them', () => {
+    const mapping = suggestMapping(table.headers, 'generic');
+    expect(mapping.workFrom).toBe('Service From');
+    expect(mapping.workTo).toBe('Service To');
+  });
+
+  it('keeps a complete, ordered work period', () => {
+    const row = preview.payments.find((payment) => payment.vendorName === 'Kowalczyk Framing');
+    expect(row?.workFrom).toBe('2025-05-01');
+    expect(row?.workTo).toBe('2025-05-28');
+  });
+
+  it('imports a row with no work dates rather than rejecting it', () => {
+    // Accounting exports usually do not carry service periods, and the ledger is still
+    // worth having: the payment date becomes a labelled proxy downstream.
+    const row = preview.payments.find((payment) => payment.vendorName === 'Ridgeline Roofing');
+    expect(row).toBeDefined();
+    expect(row?.workFrom).toBeNull();
+    expect(row?.workTo).toBeNull();
+  });
+
+  it('discards a half-populated period rather than treating it as one', () => {
+    const row = preview.payments.find((payment) => payment.vendorName === 'Vega Concrete');
+    expect(row?.workFrom).toBeNull();
+    expect(row?.workTo).toBeNull();
+  });
+
+  it('discards an inverted period rather than testing it backwards', () => {
+    const row = preview.payments.find((payment) => payment.vendorName === 'Summit Excavation');
+    expect(row?.workFrom).toBeNull();
+  });
+
+  it('counts how many rows will be proxied, so the import can say so', () => {
+    expect(preview.payments).toHaveLength(4);
+    expect(preview.withWorkPeriod).toBe(1);
+  });
+
+  it('reports none where the columns were not mapped at all', () => {
+    const unmapped = buildImportPreview({
+      table,
+      mapping: { vendorName: 'Vendor', paidOn: 'Date', amount: 'Amount' },
+      ...TERM,
+    });
+    expect(unmapped.withWorkPeriod).toBe(0);
+  });
+});
+
 describe('re-import stability', () => {
   it('produces identical output for identical input', () => {
     const build = () =>

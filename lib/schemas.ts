@@ -54,6 +54,19 @@ export const pctField = z.string().transform((value, ctx) => {
   return pct;
 });
 
+export const jurisdictionSchema = z
+  .string()
+  .trim()
+  .regex(/^[A-Z]{2}-[A-Z0-9]{1,3}$/, 'use an ISO code such as US-TN');
+
+export const specialCategorySchema = z.enum([
+  'sole_proprietor_no_employees',
+  'owner_operator_vehicle',
+  'equipment_with_operator',
+  'licensed_professional',
+  'labor_only_no_materials',
+]);
+
 export const entityTypeSchema = z.enum([
   'unknown',
   'corporation',
@@ -83,18 +96,31 @@ export const certificateStatusSchema = z.enum([
   'rejected',
 ]);
 
-/** Setup screen (brief §8.1). Every figure comes off the declarations page. */
+/**
+ * Setup screen. Every figure comes off the declarations page.
+ *
+ * The jurisdiction is required, and deliberately so: without it no rules profile resolves
+ * and the engine produces no estimate. Making it optional would reintroduce the silent
+ * national default this product must not have.
+ */
 export const policyFormSchema = z
   .object({
     carrierName: z.string().trim().min(1, 'enter the carrier on your declarations page'),
     policyNumber: z.string().trim().min(1, 'enter the policy number'),
     termStart: isoDate,
     termEnd: isoDate,
+    jurisdiction: jurisdictionSchema,
+    ratingBureau: z.string().trim().optional(),
     governingClassCode: z.string().trim().min(1, 'enter the governing class code, for example 5645'),
     governingRate: rateField,
     experienceMod: modField,
     estimatedAnnualPremium: nonNegativeMoneyField,
-    noncomplianceSurchargePct: pctField,
+    // Audit compliance. None of these is "a subcontractor had no certificate".
+    auditEndorsementOnPolicy: z.boolean().default(false),
+    auditRecordsFurnished: z.boolean().default(true),
+    auditPermitted: z.boolean().default(true),
+    auditEstimatedIssued: z.boolean().default(false),
+    carrierConfiguredNoncompliancePct: pctField,
   })
   .refine((value) => value.termEnd >= value.termStart, {
     message: 'the term must end on or after it starts',
@@ -110,6 +136,13 @@ export const columnMappingSchema = z.object({
   amount: z.string().min(1, 'map the amount column'),
   sourceRef: z.string().optional(),
   memo: z.string().optional(),
+  /**
+   * Optional, and worth mapping when the export has them: coverage is tested against the
+   * period the work was performed, and without these the payment date stands in as a
+   * labelled proxy.
+   */
+  workFrom: z.string().optional(),
+  workTo: z.string().optional(),
 });
 
 export type ColumnMapping = z.infer<typeof columnMappingSchema>;
@@ -133,7 +166,27 @@ export const subcontractorPatchSchema = z.object({
   trade: z.string().trim().max(120).optional(),
   notes: z.string().trim().max(2000).optional(),
   classCodeRateId: uuid.nullable().optional(),
+  specialCategory: specialCategorySchema.nullable().optional(),
+  /** The class and rate an auditor actually applied to this sub on a prior audit. */
+  priorAuditClassCode: z.string().trim().max(20).nullable().optional(),
+  priorAuditRate: rateField.nullable().optional(),
 });
+
+/** Recording when the work behind a payment was performed. Both ends or neither. */
+export const workPeriodSchema = z
+  .object({
+    paymentId: uuid,
+    workFrom: isoDate.nullable(),
+    workTo: isoDate.nullable(),
+  })
+  .refine((value) => (value.workFrom === null) === (value.workTo === null), {
+    message: 'enter both ends of the work period, or neither',
+    path: ['workTo'],
+  })
+  .refine(
+    (value) => value.workFrom === null || value.workTo === null || value.workTo >= value.workFrom,
+    { message: 'the work period cannot end before it starts', path: ['workTo'] },
+  );
 
 export const materialSplitSchema = z.object({
   paymentId: uuid,

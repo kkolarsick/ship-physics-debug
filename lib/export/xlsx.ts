@@ -1,8 +1,13 @@
 import 'server-only';
 import ExcelJS from 'exceljs';
 import { DISCLAIMER } from '@/lib/copy';
-import { RULESET_STATEMENTS } from '@/lib/exposure/ruleset';
-import { FLAG_LABELS, ZERO_REASON_LABELS } from '@/lib/exposure/labels';
+import {
+  COVERAGE_BASIS_LABELS,
+  FLAG_LABELS,
+  RATE_PROVENANCE_LABELS,
+  ZERO_REASON_LABELS,
+} from '@/lib/exposure/labels';
+import { CONFIDENCE_FACTOR_LABELS, CONFIDENCE_LABELS } from '@/lib/exposure/confidence';
 import { formatMod, formatRate } from '@/lib/money';
 import type { PortfolioExposure } from '@/lib/exposure/types';
 import type { Dataset, PolicyRecord } from '@/lib/db/types';
@@ -30,6 +35,7 @@ export async function renderWorkbook(input: WorkbookInput): Promise<Buffer> {
   workbook.created = input.generatedAt;
 
   summarySheet(workbook, input);
+  confidenceSheet(workbook, input);
   subcontractorSheet(workbook, input);
   paymentSheet(workbook, input);
   certificateSheet(workbook, input);
@@ -58,16 +64,30 @@ function summarySheet(workbook: ExcelJS.Workbook, input: WorkbookInput): void {
     ['Experience modification factor', formatMod(input.policy.experienceMod)],
     ['Estimated annual premium', dollars(input.policy.estimatedAnnualPremium)],
     ['', ''],
+    ['', ''],
+    ['Jurisdiction', input.policy.jurisdiction ?? 'not set'],
+    ['Rating bureau', input.portfolio.provenance.ratingBureau ?? 'not set'],
+    ['Rules profile', input.portfolio.rulesProfile?.label ?? 'none resolved'],
+    ['Rules profile status', input.portfolio.provenance.rulesProfileStatus],
+    ['', ''],
+    ['Estimate status', input.portfolio.status],
+    ...(input.portfolio.status === 'unavailable'
+      ? ([['Why no estimate', input.portfolio.unavailable?.message ?? '']] as [string, string][])
+      : ([] as [string, string][])),
     ['Added to auditable payroll', dollars(input.portfolio.addedPayroll)],
     ['Estimated additional premium', dollars(input.portfolio.addedPremiumBeforeSurcharge)],
-    ['Non-compliance surcharge modeled', dollars(input.portfolio.surcharge)],
+    ['Payroll with no defensible rate (not rated)', dollars(input.portfolio.unratedPayroll)],
+    ['Premium resting on the governing-rate proxy', dollars(input.portfolio.proxyRatedPremium)],
+    ['Audit noncompliance charge', dollars(input.portfolio.auditNoncompliance.charge)],
+    ['Audit noncompliance basis', input.portfolio.auditNoncompliance.statement],
     ['Total estimated additional premium', dollars(input.portfolio.totalExposure)],
     ['', ''],
-    ['Removed by a certificate covering the work dates', dollars(input.portfolio.addedPremiumBeforeSurcharge)],
+    ['Removed by a certificate covering the period worked', dollars(input.portfolio.addedPremiumBeforeSurcharge)],
     ['Reachable by an original split invoice', dollars(input.portfolio.clearedBySplitInvoice)],
     ['Only a certificate clears', dollars(input.portfolio.clearedByCertificateOnly)],
     ['', ''],
-    ['Ruleset version', input.portfolio.rulesetVersion],
+    ['Overall confidence', CONFIDENCE_LABELS[input.portfolio.confidence.level]],
+    ['Ruleset', `${input.portfolio.provenance.rulesetId} ${input.portfolio.provenance.rulesetVersion}`],
     ['Generated', input.generatedAt.toISOString()],
   ];
 
@@ -77,7 +97,6 @@ function summarySheet(workbook: ExcelJS.Workbook, input: WorkbookInput): void {
   }
 
   sheet.getRow(1).font = { bold: true };
-  sheet.getRow(14).font = { bold: true };
 
   sheet.addRow([]);
   const disclaimerRow = sheet.addRow([DISCLAIMER]);
@@ -94,6 +113,9 @@ function subcontractorSheet(workbook: ExcelJS.Workbook, input: WorkbookInput): v
     { header: 'Entity type', key: 'entity', width: 16 },
     { header: 'Class code', key: 'class', width: 11 },
     { header: 'Rate', key: 'rate', width: 9 },
+    { header: 'Rate basis', key: 'rateBasis', width: 28 },
+    { header: 'Coverage tested against', key: 'coverageBasis', width: 24 },
+    { header: 'Confidence', key: 'confidence', width: 16 },
     { header: 'Paid in term', key: 'paid', width: 15 },
     { header: 'Inside coverage', key: 'covered', width: 15 },
     { header: 'Outside coverage', key: 'uncovered', width: 16 },
@@ -111,17 +133,22 @@ function subcontractorSheet(workbook: ExcelJS.Workbook, input: WorkbookInput): v
       name: sub.subcontractorName,
       triage: record?.triage ?? 'undecided',
       entity: record?.entityType ?? 'unknown',
-      class: sub.classCode,
-      rate: Number(formatRate(sub.rate)),
+      class: sub.rate.classCode ?? '',
+      rate: sub.rate.rate === null ? '' : Number(formatRate(sub.rate.rate)),
+      rateBasis: RATE_PROVENANCE_LABELS[sub.rate.provenance],
+      coverageBasis: sub.usedPaymentDateProxy
+        ? COVERAGE_BASIS_LABELS.payment_date_proxy
+        : COVERAGE_BASIS_LABELS.work_period,
+      confidence: CONFIDENCE_LABELS[sub.confidence.level],
       paid: dollars(sub.paidTotal),
       covered: dollars(sub.coveredTotal),
       uncovered: dollars(sub.uncoveredTotal),
       claimed: dollars(sub.materialClaimed),
       allowed: dollars(sub.materialAllowed),
       payroll: dollars(sub.addedPayroll),
-      premium: dollars(sub.addedPremium),
+      premium: sub.addedPremium === null ? '' : dollars(sub.addedPremium),
       basis:
-        sub.addedPremium > 0
+        (sub.addedPremium ?? 0) > 0
           ? 'Will be included in auditable payroll'
           : sub.zeroReason
             ? ZERO_REASON_LABELS[sub.zeroReason]
@@ -153,42 +180,74 @@ function paymentSheet(workbook: ExcelJS.Workbook, input: WorkbookInput): void {
   sheet.columns = [
     { header: 'Subcontractor', key: 'name', width: 34 },
     { header: 'Paid on', key: 'paidOn', width: 13 },
+    { header: 'Work from', key: 'workFrom', width: 13 },
+    { header: 'Work to', key: 'workTo', width: 13 },
+    { header: 'Tested against', key: 'testedAgainst', width: 22 },
     { header: 'Reference', key: 'ref', width: 16 },
     { header: 'Amount', key: 'amount', width: 15 },
-    { header: 'Against coverage on file', key: 'covered', width: 26 },
+    { header: 'Against coverage on file', key: 'covered', width: 30 },
     { header: 'Material claimed', key: 'material', width: 16 },
     { header: 'Evidence', key: 'evidence', width: 20 },
   ];
 
-  const coveredByPayment = new Map<string, boolean>();
-  for (const sub of input.portfolio.subs) {
-    for (const id of sub.coveredPaymentIds) coveredByPayment.set(id, true);
-    for (const id of sub.uncoveredPaymentIds) coveredByPayment.set(id, false);
-  }
+  const assessmentByPayment = new Map(
+    input.portfolio.subs.flatMap((sub) =>
+      sub.assessments.map((assessment) => [assessment.paymentId, assessment] as const),
+    ),
+  );
 
   const nameById = new Map(input.data.subcontractors.map((sub) => [sub.id, sub.name]));
 
   for (const payment of [...input.data.payments].sort(
     (a, b) => a.paidOn.localeCompare(b.paidOn) || a.subcontractorId.localeCompare(b.subcontractorId),
   )) {
-    const covered = coveredByPayment.get(payment.id);
+    const assessment = assessmentByPayment.get(payment.id);
     sheet.addRow({
       name: nameById.get(payment.subcontractorId) ?? payment.subcontractorId,
       paidOn: payment.paidOn,
+      workFrom: payment.workFrom ?? '',
+      workTo: payment.workTo ?? '',
+      testedAgainst: assessment ? COVERAGE_BASIS_LABELS[assessment.basis] : 'Not evaluated',
       ref: payment.sourceRef ?? '',
       amount: dollars(payment.amount),
       covered:
-        covered === undefined
+        assessment === undefined
           ? 'Outside the audit period'
-          : covered
-            ? 'Inside a covered window'
-            : 'Outside every covered window',
+          : assessment.uncoveredAmount === 0
+            ? 'Inside a covered period'
+            : assessment.coveredAmount === 0
+              ? 'Outside every covered period'
+              : `Split: ${assessment.coveredDays} of ${assessment.totalDays} days covered`,
       material: payment.materialAmount === null ? '' : dollars(payment.materialAmount),
       evidence: payment.materialEvidence,
     });
   }
 
   formatMoneyColumns(sheet, ['amount', 'material']);
+  sheet.getRow(1).font = { bold: true };
+  sheet.views = [{ state: 'frozen', ySplit: 1 }];
+}
+
+function confidenceSheet(workbook: ExcelJS.Workbook, input: WorkbookInput): void {
+  const sheet = workbook.addWorksheet('Assumptions');
+  sheet.columns = [
+    { header: 'Factor', key: 'factor', width: 26 },
+    { header: 'Level', key: 'level', width: 18 },
+    { header: 'What is known', key: 'statement', width: 78 },
+    { header: 'Assumption made', key: 'assumption', width: 78 },
+  ];
+
+  for (const entry of input.portfolio.confidence.factors) {
+    const row = sheet.addRow({
+      factor: CONFIDENCE_FACTOR_LABELS[entry.id],
+      level: CONFIDENCE_LABELS[entry.level],
+      statement: entry.statement,
+      assumption: entry.assumption ?? '',
+    });
+    row.getCell('statement').alignment = { wrapText: true, vertical: 'top' };
+    row.getCell('assumption').alignment = { wrapText: true, vertical: 'top' };
+  }
+
   sheet.getRow(1).font = { bold: true };
   sheet.views = [{ state: 'frozen', ySplit: 1 }];
 }
@@ -206,6 +265,8 @@ function certificateSheet(workbook: ExcelJS.Workbook, input: WorkbookInput): voi
     { header: 'Producer', key: 'producer', width: 30 },
     { header: 'Producer email', key: 'email', width: 30 },
     { header: 'Extraction confidence', key: 'confidence', width: 20 },
+    { header: 'How it was matched', key: 'matchMethod', width: 20 },
+    { header: 'Reviewed by a person', key: 'reviewed', width: 20 },
   ];
 
   const nameById = new Map(input.data.subcontractors.map((sub) => [sub.id, sub.name]));
@@ -227,6 +288,8 @@ function certificateSheet(workbook: ExcelJS.Workbook, input: WorkbookInput): voi
         certificate.extractionConfidenceThousandths === null
           ? 'Entered by hand'
           : `${(certificate.extractionConfidenceThousandths / 10).toFixed(0)}%`,
+      matchMethod: certificate.matchMethod,
+      reviewed: certificate.evidence === 'model_extracted' ? 'No' : 'Yes',
     });
   }
 
@@ -238,14 +301,22 @@ function methodologySheet(workbook: ExcelJS.Workbook, input: WorkbookInput): voi
   const sheet = workbook.addWorksheet('Methodology');
   sheet.columns = [{ width: 120 }];
 
-  sheet.addRow(['Methodology']).font = { bold: true };
-  for (const statement of RULESET_STATEMENTS) {
+  sheet.addRow([
+    input.portfolio.rulesProfile
+      ? `${input.portfolio.rulesProfile.label} — ${input.portfolio.provenance.rulesetId} ${input.portfolio.provenance.rulesetVersion} (${input.portfolio.provenance.rulesProfileStatus})`
+      : 'No rules profile was in effect for this policy term.',
+  ]).font = { bold: true };
+  for (const statement of input.portfolio.rulesProfile?.statements ?? []) {
     const row = sheet.addRow([statement]);
     row.getCell(1).alignment = { wrapText: true, vertical: 'top' };
     row.height = 32;
   }
   sheet.addRow([]);
-  sheet.addRow([`Ruleset version: ${input.portfolio.rulesetVersion}`]);
+  sheet.addRow([`Jurisdiction: ${input.policy.jurisdiction ?? 'not set'}`]);
+  sheet.addRow([
+    `Ruleset: ${input.portfolio.provenance.rulesetId} ${input.portfolio.provenance.rulesetVersion}`,
+  ]);
+  sheet.addRow([`Audit noncompliance: ${input.portfolio.auditNoncompliance.statement}`]);
   sheet.addRow([`Generated: ${input.generatedAt.toISOString()}`]);
   sheet.addRow([]);
   const disclaimer = sheet.addRow([DISCLAIMER]);
