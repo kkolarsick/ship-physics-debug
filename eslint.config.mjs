@@ -8,8 +8,6 @@ const config = [
       'test-results/**',
       'playwright-report/**',
       '.data/**',
-      // The Roblox prototype this repository previously held. Not part of this app.
-      'src/**',
     ],
   },
   ...next,
