@@ -1,0 +1,100 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * The output may be handed to a carrier's auditor, so the screen is built to read as a
+ * workpaper: dense, tabular, hairline rules, tabular-figure numerals everywhere a number
+ * appears. There are no gradients, no stat tiles, and no icon set. The only loud things
+ * on any page are the headline exposure figure and the coverage-window timeline.
+ */
+
+:root {
+  color-scheme: light;
+}
+
+html {
+  background-color: theme('colors.paper');
+}
+
+body {
+  color: theme('colors.ink.DEFAULT');
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: 'tnum' 1, 'cv05' 1;
+}
+
+/* Every figure lines up column to column, the way a printed schedule does. */
+.tabular,
+table {
+  font-variant-numeric: tabular-nums;
+}
+
+@layer components {
+  .rule-t {
+    @apply border-t border-rule;
+  }
+
+  .workpaper-table {
+    @apply w-full border-collapse text-sm;
+  }
+
+  .workpaper-table thead th {
+    @apply border-b border-rule-strong px-3 py-2 text-left align-bottom text-2xs font-semibold uppercase tracking-wider text-ink-muted;
+  }
+
+  .workpaper-table tbody td {
+    @apply border-b border-rule px-3 py-2 align-top;
+  }
+
+  .workpaper-table tbody tr:hover {
+    @apply bg-paper;
+  }
+
+  .num {
+    @apply text-right font-medium tabular-nums;
+  }
+
+  .label {
+    @apply text-2xs font-semibold uppercase tracking-wider text-ink-muted;
+  }
+
+  .field {
+    @apply w-full rounded-none border border-rule-strong bg-white px-2.5 py-1.5 text-sm outline-none transition focus:border-ink focus:ring-1 focus:ring-ink/20;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 border border-ink bg-ink px-3.5 py-1.5 text-sm font-medium text-paper transition hover:bg-ink/85 disabled:cursor-not-allowed disabled:opacity-40;
+  }
+
+  .btn-quiet {
+    @apply inline-flex items-center justify-center gap-2 border border-rule-strong bg-white px-3.5 py-1.5 text-sm font-medium text-ink transition hover:border-ink disabled:cursor-not-allowed disabled:opacity-40;
+  }
+
+  .panel {
+    @apply border border-rule bg-card;
+  }
+
+  .panel-head {
+    @apply flex flex-wrap items-baseline justify-between gap-3 border-b border-rule px-4 py-2.5;
+  }
+
+  .kbd {
+    @apply inline-flex min-w-[1.4rem] items-center justify-center border border-rule-strong bg-paper px-1 py-0.5 font-mono text-2xs text-ink-muted;
+  }
+}
+
+/* Focus is visible without being decorative. */
+:focus-visible {
+  outline: 2px solid theme('colors.ink.DEFAULT');
+  outline-offset: 1px;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background: #fff;
+  }
+}
