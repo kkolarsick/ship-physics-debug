@@ -66,6 +66,7 @@ const subs: SubcontractorRecord[] = GOLDEN_SUBS.map((sub) => ({
   classCodeOverride: sub.classCodeOverride,
   priorAuditRate: null,
   specialCategory: null,
+  actualPayroll: null,
   notes: null,
 }));
 
@@ -83,6 +84,7 @@ subs.push({
   classCodeOverride: null,
   priorAuditRate: null,
   specialCategory: null,
+  actualPayroll: null,
   notes: 'Material only — no labor on site.',
 });
 

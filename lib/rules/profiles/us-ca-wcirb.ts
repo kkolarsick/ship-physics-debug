@@ -1,74 +1,40 @@
-import type { RulesProfile } from '../types';
+import { declaredProfile, STANDARD_OPEN_QUESTIONS } from './declared';
 
 /**
- * California — WCIRB.
+ * California — Workers' Compensation Insurance Rating Bureau of California.
  *
  * California is an independent-bureau state: its Uniform Statistical Reporting Plan
  * governs, not the NCCI Basic Manual, and the treatment of uninsured subcontract cost and
- * of labor/material separation does not follow from the NCCI profile.
- *
- * Those rules have not been transcribed here. Rather than let a California policy quietly
- * pick up NCCI treatment and produce a dollar figure, this profile declares the
- * jurisdiction and models nothing: `uninsuredSubcontractor.treatment` is `not_modeled`, so
- * the engine returns "estimate unavailable — rules not configured" for any policy that
- * selects it. Populating it is a data change in this file.
+ * of labor/material separation does not follow from the NCCI profile. Declared so a
+ * California policy is recognised; not modelled, so it produces no figure.
  */
-export const US_CA_WCIRB: RulesProfile = {
+export const US_CA_WCIRB = declaredProfile({
   rulesetId: 'us-ca-wcirb',
-  rulesetVersion: '2026.1.0-unpopulated',
-  label: 'California — WCIRB (declared, rules not yet populated)',
-  ratingBureau: 'WCIRB',
+  rulesetVersion: 'CA_2026.1-unpopulated',
+  label: 'California — WCIRB',
   jurisdictions: ['US-CA'],
+  ratingBureau: 'WCIRB',
+  sourceAuthority: 'rating_bureau_manual',
   effectiveFrom: '2026-01-01',
-  effectiveTo: null,
-  status: 'draft',
-  verifiedBy: null,
-  verifiedAt: null,
   sources: [
     {
+      authority: 'rating_bureau_manual',
       label: 'WCIRB California Uniform Statistical Reporting Plan',
-      reference: 'Part 3 — Standard Classification System; uninsured subcontractor treatment',
+      reference: 'Standard classification system; payroll and uninsured subcontractors',
+      url: 'https://www.wcirb.com/',
+      retrievedAt: null,
+    },
+    {
+      authority: 'state_regulator_guidance',
+      label: 'California Department of Industrial Relations, Division of Workers’ Compensation',
+      reference: 'Coverage obligations and contractor licensing interaction',
+      url: 'https://www.dir.ca.gov/dwc/',
+      retrievedAt: null,
     },
   ],
-
-  uninsuredSubcontractor: {
-    treatment: 'not_modeled',
-    deemedLaborShare: null,
-    notes:
-      'Not transcribed from the WCIRB plan. The engine declines to produce a figure for California rather than borrowing another jurisdiction’s treatment.',
-  },
-
-  laborMaterial: {
-    separationPermitted: false,
-    acceptedEvidence: [],
-    cap: { kind: 'none' },
-    notes: 'Not transcribed from the WCIRB plan.',
-  },
-
-  classification: {
-    basis: 'subcontractor_trade_class',
-    governingRateProxyPermitted: false,
-    notes: 'Not transcribed from the WCIRB plan.',
-  },
-
-  specialCategories: [],
-
-  coveragePeriod: {
-    paymentDateProxyPermitted: false,
-    partialOverlap: 'treat_as_uncovered',
-    notes: 'Not transcribed from the WCIRB plan.',
-  },
-
-  auditNoncompliance: {
-    supported: false,
-    triggers: [],
-    charge: { kind: 'not_modeled' },
-    notes: 'Not transcribed from the WCIRB plan.',
-  },
-
-  largeUntriagedVendorThreshold: 1_000_000,
-
-  statements: [
-    'This jurisdiction is recognised but its rules have not been populated in this product. No premium estimate is produced for it.',
+  openQuestions: [
+    ...STANDARD_OPEN_QUESTIONS,
+    'How does California’s dual-wage classification system apply to payroll added for an uninsured subcontractor?',
+    'How does contractor licensing status bear on whether a party is treated as a subcontractor or an employee at audit?',
   ],
-};
+});

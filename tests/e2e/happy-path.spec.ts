@@ -11,7 +11,7 @@ import { expect, test } from '@playwright/test';
 test.describe.configure({ mode: 'serial' });
 
 test('from the headline figure to a downloaded workpaper', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/exposure');
 
   // The golden fixtures total $405,700 of added payroll and $52,822 of added premium.
   await expect(page.getByText('Estimated additional premium at audit')).toBeVisible();
@@ -94,7 +94,7 @@ test('a jurisdiction whose rules are not configured produces no figure', async (
   await page.getByRole('button', { name: /Save/ }).click();
   await expect(page.getByText(/Policy term saved|Check the highlighted/)).toBeVisible();
 
-  await page.goto('/');
+  await page.goto('/exposure');
   await expect(page.getByText('Estimate unavailable')).toBeVisible();
   await expect(page.getByText(/has not been populated in this build/)).toBeVisible();
 
@@ -110,12 +110,12 @@ test('a jurisdiction whose rules are not configured produces no figure', async (
   await page.goto('/setup');
   await page.locator('select[name="jurisdiction"]').selectOption('US-TN');
   await page.getByRole('button', { name: /Save/ }).click();
-  await page.goto('/');
+  await page.goto('/exposure');
   await expect(page.getByText('$52,822', { exact: true }).first()).toBeVisible();
 });
 
 test('the disclaimer travels with the figures', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/exposure');
   await expect(
     page.getByText('Not a determination of premium, not insurance advice'),
   ).toBeVisible();

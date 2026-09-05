@@ -51,7 +51,10 @@ export interface Store {
   patchSubcontractor(
     subcontractorId: string,
     patch: Partial<
-      Pick<SubcontractorRecord, 'entityType' | 'trade' | 'notes' | 'specialCategory' | 'priorAuditRate'>
+      Pick<
+        SubcontractorRecord,
+        'entityType' | 'trade' | 'notes' | 'specialCategory' | 'priorAuditRate' | 'actualPayroll'
+      >
     > & {
       classCodeRateId?: string | null;
     },

@@ -39,6 +39,8 @@ const SPECIAL_CATEGORY_LABELS: Record<SpecialCategory, string> = {
   equipment_with_operator: 'Equipment hired with an operator',
   licensed_professional: 'Licensed professional services',
   labor_only_no_materials: 'Labor only, no materials',
+  piecework: 'Piecework',
+  independent_contractor: 'Independent contractor',
 };
 
 const ENTITY_LABELS: Record<EntityType, string> = {

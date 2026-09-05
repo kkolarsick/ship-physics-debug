@@ -210,7 +210,10 @@ export class SupabaseStore implements Store {
   async patchSubcontractor(
     subcontractorId: string,
     patch: Partial<
-      Pick<SubcontractorRecord, 'entityType' | 'trade' | 'notes' | 'specialCategory' | 'priorAuditRate'>
+      Pick<
+        SubcontractorRecord,
+        'entityType' | 'trade' | 'notes' | 'specialCategory' | 'priorAuditRate' | 'actualPayroll'
+      >
     > & {
       classCodeRateId?: string | null;
     },
@@ -223,6 +226,10 @@ export class SupabaseStore implements Store {
     if (patch.priorAuditRate !== undefined) {
       update.prior_audit_class_code = patch.priorAuditRate?.classCode ?? null;
       update.prior_audit_rate_ten_thousandths = patch.priorAuditRate?.rate ?? null;
+    }
+    if (patch.actualPayroll !== undefined) {
+      update.actual_payroll_cents = patch.actualPayroll?.amount ?? null;
+      update.actual_payroll_evidence = patch.actualPayroll?.evidence ?? null;
     }
     if (patch.classCodeRateId !== undefined) update.class_code_override_id = patch.classCodeRateId;
     if (Object.keys(update).length === 0) return;
@@ -676,6 +683,15 @@ function toSubcontractor(
           }
         : null,
     specialCategory: (str(row.special_category) as SubcontractorRecord['specialCategory']) ?? null,
+    actualPayroll:
+      row.actual_payroll_cents !== null && row.actual_payroll_cents !== undefined
+        ? {
+            amount: num(row.actual_payroll_cents),
+            evidence: String(row.actual_payroll_evidence) as NonNullable<
+              SubcontractorRecord['actualPayroll']
+            >['evidence'],
+          }
+        : null,
     notes: str(row.notes),
   };
 }

@@ -144,7 +144,7 @@ describe('the charge mechanism comes from the profile', () => {
       policy({
         auditCompliance: auditCompliance({ endorsementOnPolicy: true, recordsFurnished: false }),
       }),
-      { supported: false, triggers: [], charge: { kind: 'not_modeled' }, notes: '' },
+      { supported: false, triggers: [], charge: { kind: 'not_modeled' }, citations: [], notes: '' },
     );
     expect(assessment.applies).toBe(false);
     expect(assessment.charge).toBe(0);

@@ -49,7 +49,17 @@ function fail(error: z.ZodError): ActionResult {
 }
 
 function refreshAll(): void {
-  for (const path of ['/', '/subs', '/chase', '/certificates', '/triage', '/import', '/export', '/setup']) {
+  for (const path of [
+    '/exposure',
+    '/subs',
+    '/chase',
+    '/certificates',
+    '/triage',
+    '/import',
+    '/export',
+    '/setup',
+    '/scan',
+  ]) {
     revalidatePath(path);
   }
 }

@@ -25,11 +25,14 @@ export function SetupForm({
   policy,
   policies,
   jurisdictions,
+  preselectedJurisdiction,
 }: {
   org: OrgRecord;
   policy: PolicyRecord | null;
   policies: readonly PolicyRecord[];
   jurisdictions: readonly JurisdictionOption[];
+  /** Carried through from the state the visitor picked at the front of the scan. */
+  preselectedJurisdiction: string | null;
 }) {
   const [state, action, pending] = useActionState<ActionResult | null, FormData>(
     savePolicyAction,
@@ -147,7 +150,7 @@ export function SetupForm({
               <select
                 className="field mt-1"
                 name="jurisdiction"
-                defaultValue={policy?.jurisdiction ?? ''}
+                defaultValue={policy?.jurisdiction ?? preselectedJurisdiction ?? ''}
               >
                 <option value="">Choose the state on your policy…</option>
                 {jurisdictions.map((entry) => (

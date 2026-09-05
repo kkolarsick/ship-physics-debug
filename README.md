@@ -10,19 +10,27 @@ dollar estimate and the evidence behind it.
 
 ## Status
 
-**Pre-production.** Audit treatment is now selected through a versioned jurisdiction rules
-profile rather than a single universal ruleset, and the engine fails closed: a policy whose
+**Pre-production.** Audit treatment is selected through a versioned jurisdiction rules
+profile rather than a universal ruleset, and the engine fails closed: a policy whose
 jurisdiction has no configured profile produces **no dollar figure at all**, not a figure
 computed under someone else's rules.
 
-Both shipped profiles are `draft` — nobody has checked them line by line against the
-governing bureau manual — and every figure they produce says so, in the UI and in both
-exports. Verifying a profile is a data change (`status`, `verifiedBy`, `verifiedAt` in
-`lib/rules/profiles/`), not a code change. Do not present a `draft` profile's output to a
-carrier as a transcription of the bureau's rule.
+The commercial footprint is six launch states — **New York, New Jersey, Pennsylvania,
+Florida, California, Texas**. All six are *declared*: the product recognises each one, names
+the authority that governs it, and lists what has to be transcribed before it will price
+anything there. **None of the six is populated yet**, so each currently returns "estimate
+unavailable". That is the intended state, not a gap in the plumbing — populating one is a
+data change in `lib/rules/profiles/<state>.ts`, and the public state page, the supported-
+states list, and the scan's state picker all follow automatically because they read the same
+registry the engine does.
+
+One profile does produce estimates today: `us-ncci-basic-manual`, a `draft` covering
+NCCI states. Draft means nobody has checked it line by line against the Basic Manual, and
+every figure it produces says so in the UI and in both exports. Do not present a `draft`
+profile's output to a carrier as a transcription of the bureau's rule.
 
 The seeded demo is deterministic and produces **$405,700** of added payroll and **$52,822**
-of estimated additional premium under the NCCI profile.
+of estimated additional premium under that profile.
 
 ## Stack
 
@@ -59,6 +67,7 @@ npm run test:e2e    # Playwright happy path
 
 ```text
 lib/rules/        jurisdiction rules profiles and fail-closed resolution
+lib/marketing/    public-page content derived from the rules registry
 lib/exposure/     pure exposure/rating engine, driven by a rules profile
 lib/money.ts      integer-cent and scaled-integer arithmetic
 lib/dates.ts      calendar-date handling
@@ -69,7 +78,9 @@ lib/chase/        ranked remediation asks and outbound drafts
 lib/export/       audit workpaper PDF and XLSX detail
 lib/db/           Supabase and local demo stores behind one interface
 supabase/         schema, RLS, storage policies, migrations
-app/              product UI and API routes
+app/(app)/        product UI, behind sign-in
+app/(marketing)/  the public funnel: homepage, state pages, scan, trust pages
+app/api/          API routes
 ```
 
 ### The rules layer
@@ -89,12 +100,35 @@ A profile is data, not code. It decides:
 | `classification` | Whether payroll is rated at the subcontractor's trade class or the governing class, and whether a governing-rate proxy is allowed |
 | `specialCategories` | Equipment with an operator, owner-operators, sole proprietors, labor-only, licensed professionals |
 | `coveragePeriod` | Whether the payment date may stand in for the work period, and how a straddling period is split |
+| `payrollBasis` | Whether the subcontractor's own payroll records displace the contract price, which records count, and what the fallback is |
+| `experienceMod` | Whether the experience mod applies to premium on the added payroll |
+| `unsupportedConditions` | Scenarios the jurisdiction declines to estimate, which the engine turns into a refusal rather than a figure |
 | `auditNoncompliance` | Which conditions can trigger a charge, and how the charge is computed |
+
+Every rule family carries `citations` — an authority, a document, a section, a URL, and when
+a person last checked it. There is no authority value that admits a blog post. `openQuestions`
+records what still has to be sourced, and drives the "what SubLedger will not calculate"
+copy on the public state page.
 
 Adding a jurisdiction is a new file in `lib/rules/profiles/`. Two profiles in
 `tests/fixtures/profiles.ts` disagree on every one of those axes, and the suite asserts they
 produce materially different payroll and premium from identical inputs — the abstraction is
 load-bearing, not decorative.
+
+### Adding a state
+
+`tests/rules/scenarios.ts` holds the scenario matrix every supported state has to answer:
+uninsured sub with no payroll records, actual payroll available, labor-and-material,
+labor-only, equipment with an operator, piecework, sole proprietor, partial certificate
+coverage, coverage lapsing mid-period, no work dates, known class, governing-rate proxy,
+unsupported classification, and an audit noncompliance charge. The work is:
+
+1. Source the rules from the governing manual and record the citations.
+2. Fill in the rule families in `lib/rules/profiles/<state>.ts`.
+3. Run the matrix and commit the resulting golden table.
+4. Set `status`, `verifiedBy`, `verifiedAt`.
+
+Nothing in the core engine changes, and no marketing page needs editing.
 
 ### Calculation engine
 
@@ -131,6 +165,36 @@ weakest factor, because one weak input is enough.
 Every premium figure is therefore explainable as: inputs (the per-payment assessments),
 assumptions (the confidence factors), ruleset (id, version, status), confidence flags, and
 the documents behind it (certificate and payment ids on the provenance record).
+
+## The public funnel
+
+`lib/marketing/states.ts` derives every public claim about a state from its rules profile:
+what SubLedger will calculate there, what it will not, which assumptions lower confidence,
+and which ruleset and version apply. **No marketing page contains a hand-written claim about
+coverage.** A state page cannot promise a jurisdiction the engine would refuse to price,
+because both read the same registry.
+
+`tests/marketing/copy-drift.test.ts` enforces that: it asserts a declared state's page says
+nothing can be calculated, that two profiles which disagree about the rules produce different
+sentences (proving the copy is generated rather than templated), that no page hard-codes a
+state as supported, that nothing claims nationwide coverage, and that there is no "book a
+demo" anywhere in the funnel.
+
+The public routes, all reachable signed out:
+
+```text
+/                                   the number, and what it is not
+/<state>/workers-comp-audit         one per recognised state, statically generated
+/supported-states                   generated from the registry, split by whether it prices
+/scan                               state selection first, then into the product
+/waitlist                           for a state that has no ruleset yet
+/methodology                        how the estimate is built, and its confidence model
+/pricing                            free scan, one-time pre-audit analysis, later monitoring
+/privacy  /security  /data-handling what is stored, who can see it, how to delete it
+```
+
+State selection happens before anything is asked for, so a contractor learns SubLedger
+cannot price their state before uploading a ledger rather than three screens later.
 
 ## Compliance posture
 
@@ -235,15 +299,17 @@ Tenant isolation is tested against a live database.
 | 5 | Explicit rate provenance, no silent governing-rate fallback | Closed — `lib/exposure/rating.ts` |
 | 6 | Cross-tenant security tests against a real database | Closed — `npm run test:db` |
 | 7 | CI/CD gates on every change | **Open** |
-| 8 | Third-party data handling disclosures and retention controls | **Open** |
+| 8 | Third-party data handling disclosures and retention controls | Pages written; the provider-terms wording needs a legal read before launch |
+| 9 | Six launch-state rules profiles populated and verified | **Open** — all six declared, none populated |
+| 10 | Funnel analytics, checkout, and the paid report artifact | **Open** |
 
 Two things still bound what this build should be used for:
 
-**Both shipped rules profiles are drafts.** `us-ncci-basic-manual` models NCCI-state
-treatment as this product understands it; nobody has checked it against the Basic Manual.
-`us-ca-wcirb` is declared so the product knows California exists, and models nothing — a
-California policy produces no estimate rather than quietly inheriting NCCI treatment.
-Verifying a profile, or populating California, is a data change in `lib/rules/profiles/`.
+**No launch state is populated.** All six are declared and fail closed. The only profile
+producing estimates is the NCCI one, and it is a draft nobody has checked against the Basic
+Manual. Sourcing the six is the critical path to commercial launch, and it is research work
+rather than engineering work — the architecture, the scenario matrix, the state pages, and
+the scan all already accommodate it.
 
 **Coverage status is still document-derived.** The app reads certificates; it does not
 confirm with any carrier that a policy was in force.

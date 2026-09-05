@@ -32,11 +32,11 @@ export async function middleware(request: NextRequest) {
 
   const { data } = await supabase.auth.getUser();
 
-  const isAuthRoute =
-    request.nextUrl.pathname.startsWith('/sign-in') ||
-    request.nextUrl.pathname.startsWith('/auth');
+  if (!data.user && isPublic(request.nextUrl.pathname)) {
+    return response;
+  }
 
-  if (!data.user && !isAuthRoute) {
+  if (!data.user) {
     const redirect = request.nextUrl.clone();
     redirect.pathname = '/sign-in';
     redirect.searchParams.set('next', request.nextUrl.pathname);
@@ -44,6 +44,32 @@ export async function middleware(request: NextRequest) {
   }
 
   return response;
+}
+
+/**
+ * Everything a stranger has to be able to reach before they have an account: the pitch,
+ * the state pages that carry its credibility, the trust pages, and the front of the scan.
+ * The funnel is the sales process, so none of it may sit behind a sign-in wall.
+ */
+const PUBLIC_PREFIXES = [
+  '/sign-in',
+  '/auth',
+  '/supported-states',
+  '/methodology',
+  '/pricing',
+  '/privacy',
+  '/security',
+  '/data-handling',
+  '/scan',
+  '/waitlist',
+];
+
+function isPublic(pathname: string): boolean {
+  if (pathname === '/') return true;
+  if (pathname.endsWith('/workers-comp-audit')) return true;
+  return PUBLIC_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
 }
 
 export const config = {

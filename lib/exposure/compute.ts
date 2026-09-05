@@ -19,7 +19,12 @@ import {
   RULES_RESOLUTION_MESSAGES,
   type RulesResolution,
 } from '@/lib/rules/registry';
-import { specialCategoryRule, type Fraction, type RulesProfile } from '@/lib/rules/types';
+import {
+  specialCategoryRule,
+  UNSUPPORTED_CONDITION_LABELS,
+  type Fraction,
+  type RulesProfile,
+} from '@/lib/rules/types';
 import {
   buildConfidence,
   combineConfidence,
@@ -116,6 +121,7 @@ export function computePortfolioExposure(request: ExposureRequest): PortfolioExp
       .map((result) => result.addedPremium ?? 0),
   );
 
+  const declined = results.filter((result) => result.status === 'unavailable');
   const auditNoncompliance = assessAuditNoncompliance(policy, profile.auditNoncompliance);
   const clearedBySplitInvoice = sumCents(rated.map((result) => result.ifSplitInvoiceObtained ?? 0));
 
@@ -132,6 +138,8 @@ export function computePortfolioExposure(request: ExposureRequest): PortfolioExp
     addedPremiumBeforeSurcharge,
     unratedPayroll: sumCents(unrated.map((result) => result.addedPayroll)),
     unratedSubcontractorCount: unrated.length,
+    unavailableSubcontractorCount: declined.length,
+    unpricedSpend: sumCents(declined.map((result) => result.paidTotal)),
     proxyRatedPremium,
     auditNoncompliance,
     totalExposure: addedPremiumBeforeSurcharge + auditNoncompliance.charge,
@@ -196,14 +204,27 @@ export function computeExposure(
   const payrollBasis = derivePayroll({
     profile,
     specialRule,
+    sub,
     assessments,
     payments: inTerm,
     paidTotal,
     uncoveredTotal,
   });
 
+  // Conditions the profile declares outside what it models. Each is a refusal to estimate,
+  // not a zero: the ledger figure survives and the pricing is withheld.
+  const declined =
+    payrollBasis.unavailable ??
+    declaredUnsupported(profile, { rate, specialRule, assessments, sub });
+  if (declined) {
+    return unavailableSub(sub, paidTotal, assessments, coverageWindows, rate, policy, provenance, declined);
+  }
+
+  // Whether the experience mod applies to premium on this added payroll is a rules
+  // question, not a given.
+  const appliedMod = profile.experienceMod.appliesToAddedPayroll ? policy.experienceMod : 1_000;
   const addedPremium =
-    rate.rate === null ? null : ratePayroll(payrollBasis.addedPayroll, rate.rate, policy.experienceMod);
+    rate.rate === null ? null : ratePayroll(payrollBasis.addedPayroll, rate.rate, appliedMod);
 
   const counterfactuals = deriveCounterfactuals({
     profile,
@@ -213,6 +234,7 @@ export function computeExposure(
     addedPremium,
     rate,
     policy,
+    appliedMod,
     deemedShare: payrollBasis.deemedLaborShareApplied,
   });
 
@@ -256,8 +278,9 @@ export function computeExposure(
     materialClaimed: payrollBasis.materialClaimed,
     materialAllowed: payrollBasis.materialAllowed,
     deemedLaborShareApplied: payrollBasis.deemedLaborShareApplied,
+    payrollBasis: payrollBasis.basis,
     rate,
-    experienceMod: policy.experienceMod,
+    experienceMod: appliedMod,
     flags,
     confidence,
     provenance,
@@ -267,6 +290,7 @@ export function computeExposure(
   if (zeroReason !== null) {
     return {
       ...base,
+      payrollBasis: 'none',
       addedPayroll: 0,
       addedPremium: rate.rate === null ? null : 0,
       ifCertificateObtained: rate.rate === null ? null : 0,
@@ -294,20 +318,31 @@ interface PayrollBasis {
   readonly materialClaimed: Cents;
   readonly materialAllowed: Cents;
   readonly deemedLaborShareApplied: Fraction | null;
+  readonly basis: SubExposure['payrollBasis'];
+  /** Set when the profile declines to build a payroll figure from what is on file. */
+  readonly unavailable: EstimateUnavailable | null;
 }
 
 function derivePayroll(input: {
   profile: RulesProfile;
   specialRule: ReturnType<typeof specialCategoryRule>;
+  sub: SubcontractorInput;
   assessments: readonly PaymentAssessment[];
   payments: readonly PaymentInput[];
   paidTotal: Cents;
   uncoveredTotal: Cents;
 }): PayrollBasis {
-  const { profile, specialRule, uncoveredTotal } = input;
+  const { profile, specialRule, sub, uncoveredTotal } = input;
 
   if (specialRule?.treatment === 'excluded_from_payroll') {
-    return { addedPayroll: 0, materialClaimed: 0, materialAllowed: 0, deemedLaborShareApplied: null };
+    return {
+      addedPayroll: 0,
+      materialClaimed: 0,
+      materialAllowed: 0,
+      deemedLaborShareApplied: null,
+      basis: 'none',
+      unavailable: null,
+    };
   }
 
   // A deemed share replaces the labor/material question rather than stacking with it.
@@ -324,7 +359,62 @@ function derivePayroll(input: {
       materialClaimed: 0,
       materialAllowed: 0,
       deemedLaborShareApplied: deemed,
+      basis: 'deemed_share',
+      unavailable: null,
     };
+  }
+
+  // Where the jurisdiction prefers the subcontractor's own payroll for the work, that
+  // displaces the amount paid entirely — payroll is payroll, and there is no material
+  // portion left to separate out of it.
+  const { payrollBasis } = profile;
+  if (payrollBasis.actualPayrollPreferred) {
+    const actual = sub.actualPayroll;
+    if (actual && payrollBasis.acceptedPayrollEvidence.includes(actual.evidence)) {
+      // Only the share of that payroll attributable to the uncovered part of the work.
+      const share =
+        input.paidTotal <= 0
+          ? 0
+          : multiplyByFraction(actual.amount, uncoveredTotal, input.paidTotal);
+      return {
+        addedPayroll: Math.max(0, share),
+        materialClaimed: 0,
+        materialAllowed: 0,
+        deemedLaborShareApplied: null,
+        basis: 'actual_payroll',
+        unavailable: null,
+      };
+    }
+
+    if (payrollBasis.subcontractPriceFallback === 'not_permitted') {
+      return {
+        addedPayroll: 0,
+        materialClaimed: 0,
+        materialAllowed: 0,
+        deemedLaborShareApplied: null,
+        basis: 'none',
+        unavailable: {
+          reason: 'actual_payroll_missing',
+          message: `${profile.label} builds this figure from the subcontractor's own payroll records for the work, and none are on file. No estimate is produced from the amount paid.`,
+        },
+      };
+    }
+
+    if (payrollBasis.subcontractPriceFallback === 'deemed_labor_share' && payrollBasis.deemedLaborShare) {
+      const fallbackShare = payrollBasis.deemedLaborShare;
+      return {
+        addedPayroll: multiplyByFraction(
+          uncoveredTotal,
+          fallbackShare.numerator,
+          fallbackShare.denominator,
+        ),
+        materialClaimed: 0,
+        materialAllowed: 0,
+        deemedLaborShareApplied: fallbackShare,
+        basis: 'deemed_share',
+        unavailable: null,
+      };
+    }
   }
 
   const materialClaimed = claimedMaterial(input.assessments, input.payments, profile);
@@ -335,6 +425,8 @@ function derivePayroll(input: {
     materialClaimed,
     materialAllowed,
     deemedLaborShareApplied: null,
+    basis: uncoveredTotal > 0 ? 'subcontract_price' : 'none',
+    unavailable: null,
   };
 }
 
@@ -399,9 +491,10 @@ function deriveCounterfactuals(input: {
   addedPremium: Cents | null;
   rate: RateSelection;
   policy: PolicyInput;
+  appliedMod: number;
   deemedShare: Fraction | null;
 }): { ifCertificateObtained: Cents | null; ifSplitInvoiceObtained: Cents | null } {
-  const { addedPremium, rate, policy } = input;
+  const { addedPremium, rate } = input;
   if (addedPremium === null || rate.rate === null) {
     return { ifCertificateObtained: null, ifSplitInvoiceObtained: null };
   }
@@ -418,7 +511,7 @@ function deriveCounterfactuals(input: {
 
   const maxDeduction = materialCap(input, input.profile);
   const residualPayroll = Math.max(0, input.uncoveredTotal - maxDeduction);
-  const residualPremium = ratePayroll(residualPayroll, rate.rate, policy.experienceMod);
+  const residualPremium = ratePayroll(residualPayroll, rate.rate, input.appliedMod);
 
   return {
     ifCertificateObtained,
@@ -685,6 +778,8 @@ function unavailablePortfolio(
     addedPremiumBeforeSurcharge: 0,
     unratedPayroll: 0,
     unratedSubcontractorCount: 0,
+    unavailableSubcontractorCount: subs.length,
+    unpricedSpend: sumCents(subs.map((entry) => entry.paidTotal)),
     proxyRatedPremium: 0,
     auditNoncompliance: {
       applies: false,
@@ -735,6 +830,7 @@ function unavailableSub(
     materialClaimed: 0,
     materialAllowed: 0,
     deemedLaborShareApplied: null,
+    payrollBasis: 'none',
     addedPayroll: 0,
     addedPremium: null,
     ifCertificateObtained: null,
@@ -799,6 +895,50 @@ function portfolioProvenance(
     certificateIds: request.certificates.map((certificate) => certificate.id),
     paymentIds: request.payments.map((payment) => payment.id),
   };
+}
+
+/**
+ * Conditions the profile declared outside what it models, checked against this
+ * subcontractor. Listing one is how a jurisdiction says "do not estimate this scenario";
+ * the engine honours it rather than producing a figure it cannot defend.
+ */
+function declaredUnsupported(
+  profile: RulesProfile,
+  context: {
+    rate: RateSelection;
+    specialRule: ReturnType<typeof specialCategoryRule>;
+    assessments: readonly PaymentAssessment[];
+    sub: SubcontractorInput;
+  },
+): EstimateUnavailable | null {
+  for (const condition of profile.unsupportedConditions) {
+    switch (condition) {
+      case 'classification_unknown':
+        if (context.rate.provenance === 'unknown') {
+          return { reason: condition, message: UNSUPPORTED_CONDITION_LABELS[condition] };
+        }
+        break;
+      case 'special_category_unsettled':
+        if (context.specialRule?.treatment === 'requires_review') {
+          return {
+            reason: condition,
+            message: `${UNSUPPORTED_CONDITION_LABELS[condition]} ${context.specialRule.notes}`,
+          };
+        }
+        break;
+      case 'work_period_missing':
+        if (context.assessments.some((entry) => entry.basis === 'payment_date_proxy')) {
+          return { reason: condition, message: UNSUPPORTED_CONDITION_LABELS[condition] };
+        }
+        break;
+      case 'actual_payroll_missing':
+        if (context.sub.actualPayroll === null) {
+          return { reason: condition, message: UNSUPPORTED_CONDITION_LABELS[condition] };
+        }
+        break;
+    }
+  }
+  return null;
 }
 
 /**

@@ -185,6 +185,7 @@ export class DemoStore implements Store {
           classCodeOverride: null,
           priorAuditRate: null,
           specialCategory: null,
+          actualPayroll: null,
           notes: null,
         };
         data.subcontractors.push(record);
@@ -214,7 +215,10 @@ export class DemoStore implements Store {
   async patchSubcontractor(
     subcontractorId: string,
     patch: Partial<
-      Pick<SubcontractorRecord, 'entityType' | 'trade' | 'notes' | 'specialCategory' | 'priorAuditRate'>
+      Pick<
+        SubcontractorRecord,
+        'entityType' | 'trade' | 'notes' | 'specialCategory' | 'priorAuditRate' | 'actualPayroll'
+      >
     > & {
       classCodeRateId?: string | null;
     },

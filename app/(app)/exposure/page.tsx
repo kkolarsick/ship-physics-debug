@@ -64,6 +64,18 @@ export default async function DashboardPage() {
             <p className="mt-2 text-6xl font-semibold leading-none tracking-tight text-risk">
               {formatDollars(portfolio.totalExposure)}
             </p>
+            {portfolio.addedPremiumBeforeSurcharge > 0 ? (
+              <p className="mt-2 text-lg font-medium text-cleared">
+                {formatDollars(portfolio.addedPremiumBeforeSurcharge)} may be addressable
+                before the audit
+              </p>
+            ) : null}
+            <p className="mt-1 text-2xs text-ink-faint">
+              {data.policy.jurisdiction} · {portfolio.provenance.ratingBureau} · ruleset{' '}
+              <span className="font-mono">
+                {portfolio.provenance.rulesetId} {portfolio.provenance.rulesetVersion}
+              </span>
+            </p>
             <p className="mt-3 max-w-lg text-sm text-ink-muted">
               {formatDollars(portfolio.addedPayroll)} of payments to {priced.length}{' '}
               {priced.length === 1 ? 'subcontractor' : 'subcontractors'} sit outside every covered

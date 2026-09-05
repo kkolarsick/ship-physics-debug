@@ -44,6 +44,7 @@ export function sub(overrides: Partial<SubcontractorInput> = {}): SubcontractorI
     classCodeOverride: { classCode: '5645', rate: 100_000 },
     priorAuditRate: null,
     specialCategory: null,
+    actualPayroll: null,
     ...overrides,
   };
 }

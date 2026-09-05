@@ -137,6 +137,7 @@ function sub(
     classCodeOverride: CARPENTRY,
     priorAuditRate: null,
     specialCategory: null,
+    actualPayroll: null,
   };
 }
 

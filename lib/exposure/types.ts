@@ -3,14 +3,16 @@ import type { IsoDate } from '@/lib/dates';
 import type {
   Jurisdiction,
   MaterialEvidence,
+  PayrollEvidence,
   RatingBureau,
   RulesProfile,
   SpecialCategory,
+  UnsupportedCondition,
 } from '@/lib/rules/types';
 import type { RulesResolutionFailure } from '@/lib/rules/registry';
 import type { EstimateConfidence } from './confidence';
 
-export type { MaterialEvidence, SpecialCategory };
+export type { MaterialEvidence, PayrollEvidence, SpecialCategory };
 
 export type EntityType =
   | 'unknown'
@@ -81,6 +83,14 @@ export interface SubcontractorInput {
   readonly priorAuditRate: { readonly classCode: string; readonly rate: RateTenThousandths } | null;
   /** An explicit assertion about the kind of arrangement, when the user has made one. */
   readonly specialCategory: SpecialCategory | null;
+  /**
+   * The subcontractor's own payroll for the work, where the contractor holds records for
+   * it. Jurisdictions that prefer actual payroll use this in place of the amount paid.
+   */
+  readonly actualPayroll: {
+    readonly amount: Cents;
+    readonly evidence: PayrollEvidence;
+  } | null;
 }
 
 export interface PaymentInput {
@@ -220,7 +230,8 @@ export interface EstimateUnavailable {
     | RulesResolutionFailure
     | 'rules_not_populated'
     | 'work_period_required'
-    | 'no_rate_available';
+    | 'no_rate_available'
+    | UnsupportedCondition;
   readonly message: string;
 }
 
@@ -257,6 +268,8 @@ export interface SubExposure {
   readonly materialAllowed: Cents;
   /** Set when the profile deemed a fixed share of the contract to be payroll. */
   readonly deemedLaborShareApplied: { readonly numerator: number; readonly denominator: number } | null;
+  /** What the payroll figure was built from, for the workpaper and the confidence model. */
+  readonly payrollBasis: 'actual_payroll' | 'subcontract_price' | 'deemed_share' | 'none';
 
   readonly addedPayroll: Cents;
   /** Null when no defensible rate exists. Payroll is still reported. */
@@ -296,6 +309,13 @@ export interface PortfolioExposure {
   /** Payroll with no defensible rate. Reported separately, never rated by proxy silently. */
   readonly unratedPayroll: Cents;
   readonly unratedSubcontractorCount: number;
+  /**
+   * Subcontractors the profile declined to price at all, and what was paid to them. The
+   * total below is what could be priced; this is what could not, and it is never folded in
+   * as a zero.
+   */
+  readonly unavailableSubcontractorCount: number;
+  readonly unpricedSpend: Cents;
   /** Premium that rests on the governing-rate proxy rather than a known class. */
   readonly proxyRatedPremium: Cents;
 

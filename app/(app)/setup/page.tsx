@@ -7,9 +7,9 @@ export const dynamic = 'force-dynamic';
 export default async function SetupPage({
   searchParams,
 }: {
-  searchParams: Promise<{ new?: string }>;
+  searchParams: Promise<{ new?: string; jurisdiction?: string }>;
 }) {
-  const { new: startNew } = await searchParams;
+  const { new: startNew, jurisdiction } = await searchParams;
   const { data } = await loadWorkspace();
 
   // Renewing is a new term, not an edit: last year's figures have to stay explainable.
@@ -31,6 +31,7 @@ export default async function SetupPage({
       policy={policy}
       policies={data.policies}
       jurisdictions={jurisdictions}
+      preselectedJurisdiction={jurisdiction ?? null}
     />
   );
 }

@@ -58,6 +58,15 @@ export const COVERAGE_BASIS_LABELS: Readonly<Record<CoverageBasis, string>> = {
   not_evaluable: 'Cannot be evaluated',
 };
 
+export const PAYROLL_BASIS_LABELS: Readonly<
+  Record<'actual_payroll' | 'subcontract_price' | 'deemed_share' | 'none', string>
+> = {
+  actual_payroll: 'Subcontractor’s own payroll records',
+  subcontract_price: 'Amount paid to the subcontractor',
+  deemed_share: 'Deemed share of the amount paid',
+  none: 'No payroll added',
+};
+
 export function describeFlag(flag: ExposureFlag): string {
   return FLAG_LABELS[flag];
 }
